@@ -172,13 +172,18 @@ mod tests {
     use super::*;
     use crate::crypto;
 
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn temp_dir(tag: &str) -> PathBuf {
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let dir = std::env::temp_dir().join(format!(
-            "lot-test-{tag}-{}-{nanos}",
+            "lot-test-{tag}-{}-{nanos}-{id}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();

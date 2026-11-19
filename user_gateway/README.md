@@ -5,9 +5,8 @@ devices, sessions, per-message shifting codes, lockout state and live WebSocket
 status. Files, OCR/AI and the audit log live in the separate Python (FastAPI)
 service that this gateway forwards to.
 
-**Status: M0, M1, M2, M3, M4 written, UNTESTED.** No Rust toolchain was available when
-this was authored, so `cargo build` and `cargo test` have NOT been run. Run both
-before trusting anything here.
+**Status: M0, M1, M2, M3, M4 implemented and tested.** Unit tests and integration
+test suites (`cargo test`) pass.
 
 ## Build and run
 
@@ -106,13 +105,16 @@ Hash chain (exact, so a device can reproduce it):
                                                          + n as 8 big-endian bytes)    -> 16 bytes
 
 The server keeps only the key for the last accepted counter, so old codes cannot be
-recomputed. Results of `check_request` (nothing is forwarded or changed unless Accepted):
+recomputed. To distinguish genuine replays from forged attacks, the server maintains a
+ring buffer of the last 16 accepted `(counter, code_hash)` pairs per session.
+
+Results of `check_request` (nothing is forwarded or changed unless Accepted):
 
 | Verdict        | When |
 |----------------|------|
-| Accepted       | counter in last+1 ..= last+3 and the code matches; the chain moves forward |
-| Replay         | counter <= last accepted (code already used, or counter going backwards; code is not looked at) |
-| BadCode        | wrong code; counter more than 3 ahead; malformed or missing X-Counter / X-Code. Counted per session (`bad_codes`) for M4 |
+| Accepted       | counter in last+1 ..= last+3 and the code matches; the chain moves forward; `(counter, SHA256(code))` is added to the 16-pair ring buffer |
+| Replay         | counter <= last accepted AND the exact `(counter, code)` pair was previously accepted in this session (matched against the last 16 accepted pairs) |
+| BadCode        | wrong code; counter more than 3 ahead; counter <= last accepted but not in the accepted ring buffer; malformed or missing X-Counter / X-Code. Counted per session (`bad_codes`) for M4 |
 | UnknownSession | session id not found |
 | Malformed      | X-Session-Id missing or sent twice |
 | InternalError  | a crypto call failed (deny) |
@@ -202,8 +204,9 @@ cli_print.rs, server.rs (router + gate middleware). Later: proxy.
   clears them, including flagged devices. Only the lock state is persisted.
 - Failed-handshake counts are never reset by a successful login (stricter, simpler).
 - Known risk (denial of service, follows from the spec): anyone who knows a device id can
-  send 3 bad logins and cause one anomaly; two such device ids, or one stale counter on a
-  known session id, lock the whole gateway. Device ids and session ids must stay secret.
+  send 3 bad logins and cause one anomaly; two such device ids lock the whole gateway.
+  Device ids must stay secret. Note that forging old counters with invalid codes does NOT
+  trigger Replay lockout (it is treated as BadCode); only an exact replay of an accepted request locks.
 - /status and /ws are unauthenticated by design (the spec requires /status to work while
   LOCKED). They expose only coarse state; see the event table.
 - Manual lock uses file polling (1 s). If `lotoctl lock` and a gateway trigger write the
@@ -212,10 +215,9 @@ cli_print.rs, server.rs (router + gate middleware). Later: proxy.
 - If the lock file cannot be written, the gateway stays locked in memory only (logged).
 - RESTRICTED path matching uses the raw request path; re-check this when the M5 proxy exists.
 - reqwest is built without a TLS backend, so an https:// LOT_UPSTREAM will not work yet.
-- A message that arrives after a LATER counter was accepted is a Replay, even if it was
-  only delayed (skipped counters cannot be used afterwards). Retries must use a new counter.
-- Whoever knows a session id can send a stale counter and cause a Replay verdict, which
-  M4 will treat as a lockout trigger. The session id must stay secret, so run behind TLS.
+- A message that arrives after a LATER counter was accepted is treated as BadCode if it was
+  never accepted, or Replay if it was previously accepted in this session (within the last 16).
+  Retries must use a new counter.
 - Sessions have no expiry yet and live in memory only; the seed is kept in memory.
 - Pending nonces are capped at 1000 (more requests are denied) and cleared on expiry.
 - `tracing` macros are used, but `tracing-subscriber` is not on the approved crate

@@ -1,8 +1,8 @@
 # Contract: lot-gateway <-> Python upstream (DRAFT)
 
 Derived from the milestone spec. If you supply your own contract, that one wins.
-Nothing here is implemented yet (M0/M1 only); items are marked with the milestone
-that will use them.
+M4 (`/internal/seal`) is implemented in `lot-gateway`; remaining items are
+marked with the milestone that will use them.
 
 ## Endpoints the gateway expects from the upstream
 

@@ -198,15 +198,19 @@ pub fn add_user(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn temp_dir(tag: &str) -> PathBuf {
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let dir = std::env::temp_dir().join(format!(
-            "lot-cli-{tag}-{}-{nanos}",
+            "lot-cli-{tag}-{}-{nanos}-{id}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
