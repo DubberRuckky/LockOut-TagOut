@@ -1,0 +1,21 @@
+[package]
+name = "lot-gateway"
+version = "0.1.0"
+edition = "2021"
+description = "Prototype zero-trust gateway: users, devices, sessions, shifting codes, lockout"
+
+# Exact pins. UNVERIFIED in the authoring environment (no rustc, no network).
+[dependencies]
+axum = { version = "=0.7.9", features = ["ws"] }
+tokio = { version = "=1.41.1", features = ["full"] }
+serde = { version = "=1.0.215", features = ["derive"] }
+serde_json = "=1.0.133"
+ed25519-dalek = { version = "=2.1.1", features = ["rand_core"] }
+sha2 = "=0.10.8"
+hkdf = "=0.12.4"
+rand = "=0.8.5"
+hex = "=0.4.3"
+clap = { version = "=4.4.18", features = ["derive"] }
+tracing = "=0.1.41"
+# no TLS backend on purpose: the prototype upstream is plain http on localhost
+reqwest = { version = "=0.12.9", default-features = false }
