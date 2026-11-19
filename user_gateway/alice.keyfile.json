@@ -1,0 +1,7 @@
+{
+  "device_id": "dev-e22d727d7ca09a34",
+  "officer_id": "alice",
+  "signing_key_hex": "325fea6df6db14dc9108c40ffbc7bd55b324c80a888ec3c44ec2d4c7f3923716",
+  "shared_secret_hex": "93bbbe64344e11ffdf5ddbedcdcf0b6dcce4723ac8676a71ae48e676d89b6b84",
+  "device_config": "lot-prototype-device-config-v1"
+}

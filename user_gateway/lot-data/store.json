@@ -1,0 +1,34 @@
+{
+  "officers": [
+    {
+      "officer_id": "alice",
+      "revoked": true,
+      "created_at": 1795093915
+    },
+    {
+      "officer_id": "Bob",
+      "revoked": true,
+      "created_at": 1795096735
+    }
+  ],
+  "devices": [
+    {
+      "device_id": "dev-e22d727d7ca09a34",
+      "officer_id": "alice",
+      "public_key_hex": "7760b430eb6fbec7dbbfe1c2add2ce71a3ee7cca1c3f9bbf0a7d792bddbc6d13",
+      "shared_secret_hex": "93bbbe64344e11ffdf5ddbedcdcf0b6dcce4723ac8676a71ae48e676d89b6b84",
+      "config_hash_hex": "a54805240cf01db5baa2b66c692b84b34c91e55a2c96626905784eafab8f047d",
+      "revoked": true,
+      "created_at": 1795093915
+    },
+    {
+      "device_id": "dev-df33f55a2456223c",
+      "officer_id": "Bob",
+      "public_key_hex": "6e51cd70a80358302fa7bec5e8cc58b1175cef83bf22f772da0901dc417cbe95",
+      "shared_secret_hex": "f229156e34c893677260eba3fa6b3942f985787b63e03924d20f455e4fc1d3e1",
+      "config_hash_hex": "a54805240cf01db5baa2b66c692b84b34c91e55a2c96626905784eafab8f047d",
+      "revoked": true,
+      "created_at": 1795096735
+    }
+  ]
+}
