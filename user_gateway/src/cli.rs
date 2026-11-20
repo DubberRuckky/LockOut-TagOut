@@ -416,6 +416,7 @@ mod tests {
             bind: "127.0.0.1:0".to_string(),
             upstream: "http://127.0.0.1:9000".to_string(),
             data_dir: dir.clone(),
+            require_face: false,
         };
 
         // System currently LOCKED

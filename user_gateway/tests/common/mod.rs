@@ -39,16 +39,19 @@ pub fn make_env() -> Env {
 pub fn make_env_upstream(upstream: &str) -> Env {
     let (device, keyfile) = crypto::new_device("alice", DEFAULT_DEVICE_CONFIG);
     let data_dir = temp_dir("env");
-    let mut store = Store {
-        path: data_dir.join("store.json"),
-        data: StoreData::default(),
-    };
-    store.add_user(device.clone()).unwrap();
     let config = Config {
         bind: "127.0.0.1:0".to_string(),
         upstream: upstream.to_string(),
-        data_dir,
+        data_dir: data_dir.clone(),
+        require_face: false,
     };
+    let mut store = Store {
+        path: config.store_path(),
+        data: StoreData::default(),
+    };
+    store.add_user(device.clone()).unwrap();
+    store.save().unwrap();
+    let _ = lot_gateway::lockout::persist_lock(&config.lock_path(), &lot_gateway::lockout::LockInfo::normal());
     Env {
         state: AppState::new(config, store),
         keyfile,

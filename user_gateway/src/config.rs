@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Settings read from environment variables (with defaults).
 #[derive(Clone, Debug)]
@@ -6,14 +7,28 @@ pub struct Config {
     pub bind: String,
     pub upstream: String,
     pub data_dir: PathBuf,
+    pub require_face: bool,
 }
 
 impl Config {
     pub fn from_env() -> Config {
+        let require_face = match std::env::var("LOT_REQUIRE_FACE") {
+            Ok(v) if v.trim() == "0" => false,
+            _ => true,
+        };
         Config {
             bind: env_or("LOT_BIND", "127.0.0.1:8080"),
             upstream: env_or("LOT_UPSTREAM", "http://127.0.0.1:8000"),
             data_dir: PathBuf::from(env_or("LOT_DATA_DIR", "./lot-data")),
+            require_face,
+        }
+    }
+
+    pub fn nonce_ttl(&self) -> Duration {
+        if self.require_face {
+            Duration::from_secs(90)
+        } else {
+            Duration::from_secs(30)
         }
     }
 
@@ -56,6 +71,7 @@ mod tests {
             bind: "127.0.0.1:1".to_string(),
             upstream: "http://x".to_string(),
             data_dir: PathBuf::from("some-dir"),
+            require_face: false,
         };
         assert_eq!(c.store_path(), PathBuf::from("some-dir").join("store.json"));
     }

@@ -14,6 +14,7 @@ async fn health_returns_200_and_ok() {
         bind: "127.0.0.1:0".to_string(),
         upstream: "http://127.0.0.1:9000".to_string(),
         data_dir: data_dir.clone(),
+        require_face: false,
     };
     let store_path: PathBuf = data_dir.join("store.json");
     let store = Store::load(&store_path).unwrap(); // missing file = empty store

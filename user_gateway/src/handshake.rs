@@ -11,12 +11,18 @@ use crate::crypto;
 use crate::log;
 use crate::state::{Live, PendingNonce, Session, SharedState};
 use crate::store::{Device, Res};
+use crate::upstream;
 use std::collections::VecDeque;
 
 pub const NONCE_TTL: Duration = Duration::from_secs(30);
 pub const MAX_NONCES: usize = 1000;
 pub const MAX_FAILURES: u32 = 3;
 const MAX_BODY: usize = 4096;
+
+pub const MAX_FACE_BODY: usize = 1_500_000;
+pub const MAX_FRAME_SIZE: usize = 200 * 1024;
+pub const MAX_FRAMES: usize = 8;
+pub const MAX_FACE_ATTEMPTS: u32 = 3;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,6 +41,14 @@ pub struct LoginRequest {
     pub passcode: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FaceRequest {
+    pub device_id: String,
+    pub nonce: String,
+    pub frames: Vec<String>,
+}
+
 // ---------- logic (no HTTP here, so tests can call it directly) ----------
 
 /// Hand out a nonce. Unknown devices ALSO get a nonce (so the endpoint does not
@@ -42,10 +56,11 @@ pub struct LoginRequest {
 pub async fn issue_challenge(state: &SharedState, device_id: &str, now: Instant) -> Res<String> {
     let known = state.store.read().await.find_device(device_id).is_some();
     let nonce = crypto::random_hex(32);
+    let ttl = state.config.nonce_ttl();
 
     let mut live = state.live.lock().await;
     live.nonces
-        .retain(|_, p| now.saturating_duration_since(p.issued_at) <= NONCE_TTL);
+        .retain(|_, p| now.saturating_duration_since(p.issued_at) <= ttl);
     if known {
         if live.nonces.len() >= MAX_NONCES {
             return Err("too many pending nonces".to_string());
@@ -55,6 +70,9 @@ pub async fn issue_challenge(state: &SharedState, device_id: &str, now: Instant)
             PendingNonce {
                 device_id: device_id.to_string(),
                 issued_at: now,
+                face_ok: false,
+                face_attempts: 0,
+                capture_id: None,
             },
         );
     }
@@ -102,7 +120,7 @@ async fn login_inner(state: &SharedState, req: &LoginRequest, now: Instant) -> R
         return Err("device is locked out".to_string());
     }
 
-    match verify_login(&mut live, &device, officer_revoked, &passcode_hash, req, now) {
+    match verify_login(state, &mut live, &device, officer_revoked, &passcode_hash, req, now) {
         Ok(seed) => {
             live.failures.remove(&device.device_id);
             // Prune expired sessions
@@ -138,6 +156,7 @@ async fn login_inner(state: &SharedState, req: &LoginRequest, now: Instant) -> R
 /// All the checks. Any problem returns Err. The nonce is consumed as soon as
 /// it is found, even if a later check fails (single use).
 fn verify_login(
+    state: &SharedState,
     live: &mut Live,
     device: &Device,
     officer_revoked: bool,
@@ -154,11 +173,16 @@ fn verify_login(
     }
     live.nonces.remove(&req.nonce);
 
-    if now.saturating_duration_since(pending.issued_at) > NONCE_TTL {
+    let ttl = state.config.nonce_ttl();
+    if now.saturating_duration_since(pending.issued_at) > ttl {
         return Err("nonce expired".to_string());
     }
     if device.revoked || officer_revoked {
         return Err("device or officer is revoked".to_string());
+    }
+
+    if state.config.require_face && !pending.face_ok {
+        return Err("face check required".to_string());
     }
 
     // Passcode check
@@ -239,12 +263,119 @@ pub async fn challenge_handler(State(state): State<SharedState>, body: Bytes) ->
     match issue_challenge(&state, &req.device_id, Instant::now()).await {
         Ok(nonce) => Json(serde_json::json!({
             "nonce": nonce,
-            "expires_in_secs": NONCE_TTL.as_secs()
+            "expires_in_secs": state.config.nonce_ttl().as_secs()
         }))
         .into_response(),
         Err(e) => {
             log::warn(&format!("challenge denied: {e}"));
             unauthorized()
+        }
+    }
+}
+
+pub async fn face_handler(State(state): State<SharedState>, body: Bytes) -> Response {
+    if body.len() > MAX_FACE_BODY {
+        log::warn("face check denied: body too large");
+        return unauthorized();
+    }
+    let req: FaceRequest = match serde_json::from_slice(&body) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn(&format!("face check denied: bad json: {e}"));
+            return unauthorized();
+        }
+    };
+
+    if req.frames.is_empty() || req.frames.len() > MAX_FRAMES || req.frames.iter().any(|f| f.len() > MAX_FRAME_SIZE) {
+        log::warn("face check denied: frame count or frame size exceeds limit");
+        return unauthorized();
+    }
+
+    if let Err(e) = state.refresh_store().await {
+        log::warn(&format!("face check denied: store reload failed: {e}"));
+        return unauthorized();
+    }
+
+    let (officer_id, device_locked) = {
+        let store = state.store.read().await;
+        match store.find_device(&req.device_id) {
+            Some(d) => (d.officer_id.clone(), d.locked_out),
+            None => {
+                log::warn("face check denied: unknown device");
+                return unauthorized();
+            }
+        }
+    };
+
+    if device_locked {
+        log::warn("face check denied: device is locked out");
+        return unauthorized();
+    }
+
+    let ttl = state.config.nonce_ttl();
+    let now = Instant::now();
+
+    {
+        let mut live = state.live.lock().await;
+        let pending = match live.nonces.get_mut(&req.nonce) {
+            Some(p) => p,
+            None => {
+                log::warn("face check denied: unknown or consumed nonce");
+                return unauthorized();
+            }
+        };
+
+        if pending.device_id != req.device_id {
+            log::warn("face check denied: nonce device mismatch");
+            return unauthorized();
+        }
+
+        if now.saturating_duration_since(pending.issued_at) > ttl {
+            log::warn("face check denied: nonce expired");
+            return unauthorized();
+        }
+
+        if pending.face_attempts >= MAX_FACE_ATTEMPTS {
+            log::warn("face check denied: max face attempts reached");
+            return Json(serde_json::json!({ "ok": false, "reason": "try_again" })).into_response();
+        }
+
+        pending.face_attempts += 1;
+    }
+
+    // Call upstream app
+    let check_res = upstream::face_check_upstream(
+        &state,
+        &req.device_id,
+        &officer_id,
+        &req.nonce,
+        &req.frames,
+    ).await;
+
+    match check_res {
+        Ok(val) => {
+            let ok = val["ok"].as_bool().unwrap_or(false);
+            if ok {
+                let capture_id = val["capture_id"].as_str().map(|s| s.to_string());
+                let mut live = state.live.lock().await;
+                if let Some(p) = live.nonces.get_mut(&req.nonce) {
+                    p.face_ok = true;
+                    p.capture_id = capture_id;
+                }
+                Json(serde_json::json!({ "ok": true })).into_response()
+            } else {
+                let raw_reason = val["reason"].as_str().unwrap_or("try_again");
+                let reason = match raw_reason {
+                    "no_face" => "no_face",
+                    "blocked" => "blocked",
+                    _ => "try_again",
+                };
+                Json(serde_json::json!({ "ok": false, "reason": reason })).into_response()
+            }
+        }
+        Err(e) => {
+            log::warn(&format!("face check upstream error: {e}"));
+            Json(serde_json::json!({ "ok": false, "reason": "try_again" })).into_response()
         }
     }
 }

@@ -59,7 +59,46 @@ pub async fn send_audit_event(state: &SharedState, mut event: serde_json::Value)
     }
 }
 
-/// Call POST /internal/unseal on the upstream app.
+/// Call POST /internal/face-check on the upstream app.
+pub async fn face_check_upstream(
+    state: &SharedState,
+    device_id: &str,
+    officer_id: &str,
+    nonce: &str,
+    frames: &[String],
+) -> Result<serde_json::Value, String> {
+    let url = format!("{}/internal/face-check", state.config.upstream.trim_end_matches('/'));
+    let body = serde_json::json!({
+        "device_id": device_id,
+        "officer_id": officer_id,
+        "nonce": nonce,
+        "frames": frames,
+    }).to_string();
+
+    let res = state
+        .http
+        .post(&url)
+        .header("content-type", "application/json")
+        .header("x-gateway-token", &state.gateway_token)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("cannot reach upstream face-check: {e}"))?;
+
+    if !res.status().is_success() {
+        return Err(format!("upstream face-check failed with status {}", res.status()));
+    }
+
+    let body_bytes = res
+        .bytes()
+        .await
+        .map_err(|e| format!("cannot read face-check response: {e}"))?;
+
+    let val = serde_json::from_slice::<serde_json::Value>(&body_bytes)
+        .map_err(|e| format!("invalid face-check json response: {e}"))?;
+
+    Ok(val)
+}
 pub async fn unseal_upstream(state: SharedState) {
     let url = format!("{}/internal/unseal", state.config.upstream.trim_end_matches('/'));
     let body = serde_json::json!({ "time": now_unix() }).to_string();

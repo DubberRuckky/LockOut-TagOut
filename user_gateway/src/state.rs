@@ -13,6 +13,9 @@ use crate::store::{now_unix, Res, Store};
 pub struct PendingNonce {
     pub device_id: String,
     pub issued_at: Instant,
+    pub face_ok: bool,
+    pub face_attempts: u32,
+    pub capture_id: Option<String>,
 }
 
 /// How many recently-accepted (counter, code_hash) pairs to remember per session.

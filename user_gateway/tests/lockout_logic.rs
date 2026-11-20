@@ -308,6 +308,7 @@ fn manual_lock_file_keeps_anomaly_count_and_is_idempotent() {
         bind: "127.0.0.1:0".to_string(),
         upstream: "http://127.0.0.1:9000".to_string(),
         data_dir: dir.clone(),
+        require_face: false,
     };
     let restricted = LockInfo { state: LockState::Restricted, anomalies: 1, reason: "bad_codes".to_string(), since: 5, initiator: None };
     persist_lock(&config.lock_path(), &restricted).unwrap();

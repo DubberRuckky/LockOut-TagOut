@@ -21,6 +21,7 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/status", get(status))
         .route("/ws", get(ws::ws_handler))
         .route("/auth/challenge", post(handshake::challenge_handler))
+        .route("/auth/face", post(handshake::face_handler))
         .route("/auth/login", post(handshake::login_handler))
         .route("/admin/users", get(admin_users))
         .route("/admin/devices", get(admin_devices))

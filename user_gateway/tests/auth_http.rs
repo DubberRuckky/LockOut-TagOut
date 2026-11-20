@@ -34,6 +34,7 @@ async fn full_handshake_over_http_with_live_store_reload() {
         bind: "127.0.0.1:0".to_string(),
         upstream: "http://127.0.0.1:9000".to_string(),
         data_dir: dir.clone(),
+        require_face: false,
     };
     let store_path = config.store_path();
     let store = Store::load(&store_path).unwrap();
