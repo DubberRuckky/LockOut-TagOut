@@ -3,75 +3,437 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LOTO Case Vault — Officer Authentication</title>
+  <title>LOTO Case Vault — Zero-Trust Evidence Gateway &amp; Ledger</title>
   <link rel="stylesheet" href="/ui/styles.css">
 </head>
 <body>
+
+  <!-- Fullscreen LOCK Overlay -->
+  <div id="screenLocked" class="fullscreen-alert">
+    <div class="alert-card locked">
+      <svg class="alert-icon" viewBox="0 0 24 24" fill="#EF4444">
+        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+      </svg>
+      <h2 class="text-danger mb-2">SYSTEM LOCKED</h2>
+      <p class="text-muted mb-6">
+        Zero-trust security threshold tripped. All network access denied (503). Server sealed.
+      </p>
+      <div class="notice-box-locked">
+        <div><strong>Reason:</strong> <span id="lockedReason">Anomalous Activity</span></div>
+        <div><strong>Since:</strong> <span id="lockedSince">-</span></div>
+        <div class="text-danger-dark mt-2">
+          Dual-officer restoration via host console required:
+          <br><code>lotoctl restore --restore-key &lt;file&gt; --officer-keyfile &lt;a&gt; --officer-keyfile &lt;b&gt;</code>
+        </div>
+      </div>
+      <button id="btnReloadLocked" class="btn btn-secondary">Retry Connection</button>
+    </div>
+  </div>
+
+  <!-- Fullscreen TAGOUT Overlay -->
+  <div id="screenTagout" class="fullscreen-alert">
+    <div class="alert-card tagout">
+      <svg class="alert-icon" viewBox="0 0 24 24" fill="#881337">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      <h2 class="text-tagout mb-2">INVESTIGATION TAGOUT ACTIVE</h2>
+      <p class="text-muted mb-6">
+        High-priority investigative lock engaged. System completely sealed.
+      </p>
+      <div class="notice-box-tagout">
+        <div><strong>Initiator:</strong> <span id="tagoutInitiator">Inspector</span></div>
+        <div><strong>Timestamp:</strong> <span id="tagoutSince">-</span></div>
+        <div class="text-tagout mt-2">
+          System unseal requires host console authorization by two Tier 4+ officers.
+        </div>
+      </div>
+      <button id="btnReloadTagout" class="btn btn-secondary">Check Status</button>
+    </div>
+  </div>
+
+  <!-- Top Header -->
   <header>
     <div class="brand">
+      <div class="brand-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+        </svg>
+      </div>
       <div>
         <div class="brand-title">LockOut-TagOut Case Vault</div>
-        <div class="brand-sub">Zero-Trust Evidence Gateway &amp; Ledger</div>
+        <div class="brand-sub">Zero-Trust Evidence Gateway &amp; Audit Ledger</div>
       </div>
     </div>
-    <div class="status-badge">
-      <span class="status-dot"></span>
-      <span id="systemStateText">NORMAL</span>
+
+    <div class="header-right">
+      <div id="systemStateBadge" class="status-badge status-normal">
+        <span class="status-dot"></span>
+        <span id="systemStateText">NORMAL</span>
+      </div>
+
+      <div id="officerHeaderBadge" class="officer-badge d-none">
+        <span id="headerOfficerId">officer</span>
+        <span id="headerRankPill" class="rank-pill">Tier 1</span>
+        <button id="signOutBtn" class="btn btn-secondary btn-small ml-2">Sign Out</button>
+      </div>
     </div>
   </header>
 
+  <!-- Navigation Tab Bar (Visible when authenticated) -->
+  <nav id="mainTabBar" class="tab-bar d-none">
+    <button class="tab-btn active" data-tab="view-cases">Cases Ledger</button>
+    <button class="tab-btn d-none" data-tab="view-detail" id="tabDetailBtn">Case Details</button>
+    <button class="tab-btn" data-tab="view-review">Review Queue</button>
+    <button class="tab-btn" data-tab="view-amendments" id="tabAmendmentsBtn">Amendments</button>
+    <button class="tab-btn" data-tab="view-audit">Audit Ledger</button>
+    <button class="tab-btn" data-tab="view-prove">Prove a File</button>
+    <button class="tab-btn" data-tab="view-tagout" id="tabTagoutBtn">Emergency Tagout</button>
+  </nav>
+
+  <!-- Main View Area -->
   <main>
-    <div class="login-card">
-      <div class="form-panel">
-        <div class="panel-title">Officer Credentials</div>
-        
-        <div class="form-group">
-          <label for="officerId">Officer ID</label>
-          <input type="text" id="officerId" placeholder="e.g. alice" autocomplete="username" required>
+
+    <!-- 1. SIGN-IN / AUTHENTICATION VIEW -->
+    <section id="view-login" class="view-section active">
+      <div class="login-container">
+        <div class="login-form-pane">
+          <h2 class="mb-2">Officer Authentication</h2>
+          <p class="text-muted mb-6">Zero-trust cryptographic challenge-response with live biometric presence.</p>
+
+          <form id="loginForm">
+            <div class="form-group">
+              <label for="officerIdInput">Officer ID</label>
+              <input type="text" id="officerIdInput" class="form-control" placeholder="e.g. alice, bob, carol" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+              <label for="stationSelect">Jurisdiction / Police Station</label>
+              <select id="stationSelect" class="form-control">
+                <option value="central">Central Precinct — Cyber &amp; Forensics</option>
+                <option value="north">North Division — Major Crimes</option>
+                <option value="south">South Command — Records Custody</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="passcodeInput">Officer Passcode</label>
+              <input type="password" id="passcodeInput" class="form-control" placeholder="Enter secure passcode" required autocomplete="current-password">
+            </div>
+
+            <div class="form-group">
+              <label for="keyfileInput">Cryptographic Device Keyfile (.json)</label>
+              <input type="file" id="keyfileInput" class="form-control" accept=".json" required>
+              <div id="keyfileStatus" class="stat-label mt-1 text-muted">No keyfile loaded.</div>
+            </div>
+
+            <button type="submit" id="loginSubmitBtn" class="btn btn-primary w-full mt-2" disabled>
+              Sign In (Awaiting Face Check)
+            </button>
+          </form>
         </div>
 
-        <div class="form-group">
-          <label for="stationSelect">Police Station</label>
-          <select id="stationSelect">
-            <option value="station-central">Central Precinct — Cyber &amp; Forensics</option>
-            <option value="station-north">North Division — Serious Crimes</option>
-            <option value="station-south">South Command — Records Custody</option>
-          </select>
+        <div class="camera-pane">
+          <div class="font-semibold mb-3">Biometric Presence Check</div>
+          <div class="video-frame">
+            <video id="loginVideo" autoplay playsinline muted></video>
+            <canvas id="captureCanvas" width="320" height="240" class="d-none"></canvas>
+          </div>
+          <div id="cameraStatusBadge" class="camera-badge camera-no-cam">
+            <span>●</span> <span id="cameraStatusText">Initializing camera...</span>
+          </div>
+          <div class="camera-caption">
+            Local camera presence required. Login is refused until face check passes.
+          </div>
         </div>
+      </div>
+    </section>
 
-        <div class="form-group">
-          <label for="passcode">Officer Passcode</label>
-          <input type="password" id="passcode" placeholder="Enter secure passcode" autocomplete="current-password" required>
+    <!-- 2. CASES LIST VIEW -->
+    <section id="view-cases" class="view-section">
+      <div class="grid-stats">
+        <div class="card stat-card">
+          <div class="stat-label">Total Cases</div>
+          <div id="statTotalCases" class="stat-val-navy">0</div>
         </div>
-
-        <div class="form-group">
-          <label for="keyfileInput">Cryptographic Device Keyfile</label>
-          <input type="file" id="keyfileInput" accept=".json" required>
+        <div class="card stat-card">
+          <div class="stat-label">Active Files</div>
+          <div id="statTotalFiles" class="stat-val-blue">0</div>
         </div>
-
-        <div class="notice-box">
-          Your face image is recorded for security audit and kept for 30 days. Optical presence is mandatory for authentication.
+        <div class="card stat-card">
+          <div class="stat-label">Review Flags</div>
+          <div id="statReviewCount" class="stat-val-warning">0</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Pending Amendments</div>
+          <div id="statPendingAmendments" class="stat-val-subtle">0</div>
         </div>
       </div>
 
-      <div class="camera-panel">
-        <div class="panel-title">Biometric Presence Feed</div>
-        <div class="video-container">
-          <video id="cameraFeed" autoplay playsinline muted></video>
-          <div class="camera-overlay"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Case Vault Ledger</div>
+          <button id="btnOpenNewCase" class="btn btn-primary">+ Open New Case</button>
         </div>
-        <div id="cameraStatus" class="camera-status status-init">
-          <span id="statusText">Initializing biometric scanner...</span>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Case ID</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Witness Protection</th>
+                <th>Created By</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="casesTableBody">
+              <tr><td colspan="7" class="text-center text-muted">Loading cases...</td></tr>
+            </tbody>
+          </table>
         </div>
-        <button id="signInBtn" class="primary-btn" disabled>Authenticate &amp; Sign In</button>
       </div>
-    </div>
+
+      <!-- New Case Modal / Drawer -->
+      <div id="newCaseModal" class="card card-modal d-none">
+        <div class="card-header">
+          <div class="card-title">Register New Case in Vault</div>
+          <button id="btnCloseNewCase" class="btn btn-secondary">Cancel</button>
+        </div>
+        <form id="newCaseForm">
+          <div class="form-group">
+            <label for="newCaseTitle">Case Title</label>
+            <input type="text" id="newCaseTitle" class="form-control" placeholder="e.g. Investigation into Data Theft" required>
+          </div>
+          <div class="form-group">
+            <label for="newCaseType">Classification Type</label>
+            <select id="newCaseType" class="form-control">
+              <option value="Cyber">Cyber Crime</option>
+              <option value="Forensic">Forensic Evidence</option>
+              <option value="Financial">Financial Fraud</option>
+              <option value="General">General Investigation</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="newCaseComplainant">Complainant / Witness Name</label>
+            <input type="text" id="newCaseComplainant" class="form-control" placeholder="Name of reporting party">
+          </div>
+          <div class="form-group">
+            <label class="checkbox-group">
+              <input type="checkbox" id="newCaseWitnessProtection">
+              <span>Enable Witness Protection Masking (Masks name in uploads &amp; audits)</span>
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary">Create Case Record</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- 3. CASE DETAIL & UPLOAD VIEW -->
+    <section id="view-detail" class="view-section">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="stat-label text-uppercase">Case Record</div>
+            <div id="detailCaseTitle" class="card-title">Case Details</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="btnCloseCaseBtn" class="btn btn-danger d-none">Close &amp; Seal Case</button>
+            <button id="btnBackToCases" class="btn btn-secondary">&larr; Back to Cases</button>
+          </div>
+        </div>
+
+        <div class="meta-grid">
+          <div><strong>Case ID:</strong> <span id="detailCaseId" class="table-code">-</span></div>
+          <div><strong>Status:</strong> <span id="detailCaseStatus" class="pill pill-open">-</span></div>
+          <div><strong>Type:</strong> <span id="detailCaseType">-</span></div>
+          <div><strong>Witness Protection:</strong> <span id="detailCaseWitness">-</span></div>
+          <div><strong>Created By:</strong> <span id="detailCaseCreator">-</span></div>
+          <div><strong>Case Hash:</strong> <span id="detailCaseHash" class="table-code">Open (unsealed)</span></div>
+        </div>
+
+        <!-- Drag & Drop Upload Zone -->
+        <div id="dropzone" class="dropzone">
+          <svg class="dropzone-icon" viewBox="0 0 24 24">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+          </svg>
+          <div class="font-bold mb-1">
+            Drag &amp; drop evidence files here, or click to browse
+          </div>
+          <div class="stat-label">
+            Supported: .txt, .pdf, .png, .jpg (automatic OCR, classification, and SHA-256 integrity binding)
+          </div>
+          <input type="file" id="evidenceFileInput" class="d-none">
+        </div>
+
+        <!-- Evidence Files Table -->
+        <h3 class="font-semibold mb-3">Deposited Evidence Files</h3>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>File ID</th>
+                <th>Filename</th>
+                <th>Classification</th>
+                <th>OCR Tags</th>
+                <th>Confidence</th>
+                <th>SHA-256 Hash</th>
+                <th>Integrity</th>
+              </tr>
+            </thead>
+            <tbody id="caseFilesTableBody">
+              <tr><td colspan="7" class="text-center text-muted">No evidence files deposited yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. REVIEW QUEUE VIEW -->
+    <section id="view-review" class="view-section">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Evidence Review Queue</div>
+          <button id="btnRefreshReview" class="btn btn-secondary">Refresh</button>
+        </div>
+        <p class="text-muted mb-4">
+          Files flagged with low OCR confidence or sensitive content requiring human review.
+        </p>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>File ID</th>
+                <th>Case ID</th>
+                <th>Filename</th>
+                <th>Tags</th>
+                <th>Confidence</th>
+                <th>Flag Reason</th>
+              </tr>
+            </thead>
+            <tbody id="reviewTableBody">
+              <tr><td colspan="6" class="text-center text-muted">Queue is empty.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. AMENDMENTS VIEW -->
+    <section id="view-amendments" class="view-section">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Case Amendments Ledger</div>
+          <button id="btnRefreshAmendments" class="btn btn-secondary">Refresh</button>
+        </div>
+        <p class="text-muted mb-4">
+          Tiers 1–3 propose modifications; Tiers 4–5 approve or reject. Every modification is immutable and hash-audited.
+        </p>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Amendment ID</th>
+                <th>Case ID</th>
+                <th>Proposed By</th>
+                <th>Changes</th>
+                <th>Status</th>
+                <th>Decided By</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="amendmentsTableBody">
+              <tr><td colspan="7" class="text-center text-muted">No pending amendments.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. AUDIT LOG VIEW -->
+    <section id="view-audit" class="view-section">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">SHA-256 Cryptographic Audit Hash Chain</div>
+          <button id="verifyAuditBtn" class="btn btn-primary">Verify Hash Chain</button>
+        </div>
+        <div id="auditVerifyStatus" class="audit-verify-banner d-none"></div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Sequence #</th>
+                <th>Timestamp</th>
+                <th>Event Type</th>
+                <th>Officer</th>
+                <th>Details</th>
+                <th>Record Hash</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <tr><td colspan="6" class="text-center text-muted">Loading audit chain...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. PROVE-A-FILE VIEW -->
+    <section id="view-prove" class="view-section">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Prove-a-File (Zero-Knowledge Existence Verification)</div>
+        </div>
+        <p class="text-muted mb-6">
+          Calculates SHA-256 completely within your browser without uploading the file content, then checks the vault ledger for proof of existence.
+        </p>
+
+        <div class="form-group">
+          <label for="proveFileInput">Select Local File to Verify</label>
+          <input type="file" id="proveFileInput" class="form-control">
+        </div>
+
+        <div id="proveResultBox" class="prove-result-panel d-none">
+          <div class="text-muted">Browser Calculated SHA-256:</div>
+          <div id="proveHashDisplay" class="table-code mb-4 break-all">-</div>
+
+          <div id="proveMatchStatus" class="font-bold mb-2">-</div>
+          <div id="proveMatchDetails" class="text-muted">-</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. EMERGENCY TAGOUT VIEW -->
+    <section id="view-tagout" class="view-section">
+      <div class="card card-tagout-header">
+        <div class="card-header">
+          <div class="card-title text-tagout">Emergency Investigation Tagout</div>
+        </div>
+        <p class="text-muted mb-6">
+          Available to <strong>Inspector (Tier 4)</strong> or <strong>Superintendent (Tier 5)</strong>.
+          Immediately locks down the entire gateway, revokes active network sessions, and seals the case vault under investigation status.
+        </p>
+
+        <div class="notice-box-tagout">
+          <strong>Warning:</strong> Once activated, network access is severed (503). Restoring service requires two Tier 4+ officers executing the dual-key restore protocol on the server host machine.
+        </div>
+
+        <button id="btnTriggerTagout" class="btn btn-danger">
+          Engage System Tagout Lockdown
+        </button>
+      </div>
+    </section>
+
   </main>
 
-  <footer>
-    LOTO Case Vault • Zero-Trust Biometric &amp; Shifting-Code Architecture • Localhost Enforced
-  </footer>
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
 
+  <!-- App Script (ES Module) -->
   <script type="module" src="/ui/app.js"></script>
 </body>
 </html>

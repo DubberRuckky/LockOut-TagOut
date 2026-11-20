@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOTO Ratchet &amp; Crypto Known-Answer Vector Verification</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #E8F0FA;
+      color: #0B2A55;
+      padding: 2rem;
+      margin: 0;
+    }
+    .card {
+      background: #FFFFFF;
+      max-width: 800px;
+      margin: 0 auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      padding: 2rem;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      border-bottom: 2px solid #0072C6;
+      padding-bottom: 0.5rem;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      color: white;
+      margin-bottom: 1.5rem;
+    }
+    .badge-pass { background: #10B981; }
+    .badge-fail { background: #EF4444; }
+    .badge-running { background: #F59E0B; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    th, td {
+      border: 1px solid #CBD5E1;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: #F1F5F9;
+    }
+    .status-ok { color: #10B981; font-weight: bold; }
+    .status-err { color: #EF4444; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>LOTO Crypto &amp; Shifting Codes Verification</h1>
+    <p>Testing browser WebCrypto implementation against known-answer test (KAT) vectors from Rust <code>crypto.rs</code> and <code>ratchet.rs</code>.</p>
+    
+    <div id="overallBadge" class="badge badge-running">RUNNING TESTS...</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Test Name</th>
+          <th>Expected Value</th>
+          <th>Computed Value</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import {
+      configHashHex,
+      deriveSessionSeed,
+      clientCode,
+      isEd25519Supported,
+      signNonce,
+      bytesToHex,
+      hexToBytes
+    } from '/ui/crypto.js';
+
+    const resultsBody = document.getElementById('resultsBody');
+    const overallBadge = document.getElementById('overallBadge');
+
+    function addRow(name, expected, computed, ok) {
+      const tr = document.createElement('tr');
+      
+      const tdName = document.createElement('td');
+      tdName.textContent = name;
+      tr.appendChild(tdName);
+
+      const tdExp = document.createElement('td');
+      tdExp.textContent = expected;
+      tr.appendChild(tdExp);
+
+      const tdComp = document.createElement('td');
+      tdComp.textContent = computed;
+      tr.appendChild(tdComp);
+
+      const tdRes = document.createElement('td');
+      tdRes.textContent = ok ? 'PASS' : 'FAIL';
+      tdRes.className = ok ? 'status-ok' : 'status-err';
+      tr.appendChild(tdRes);
+
+      resultsBody.appendChild(tr);
+      return ok;
+    }
+
+    async function runTests() {
+      let allPassed = true;
+
+      // Test 1: SHA-256 Config Hash known vector
+      try {
+        const hash = await configHashHex("abc");
+        const exp = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        const ok = addRow("1. Config Hash (SHA-256)", exp, hash, hash === exp);
+        if (!ok) allPassed = false;
+      } catch (e) {
+        addRow("1. Config Hash (SHA-256)", "success", "Error: " + e.message, false);
+        allPassed = false;
+      }
+
+      // Test 2: Session Seed Known Answer Test
+      try {
+        const secret = new Uint8Array(32).fill(7);
+        const nonce = new Uint8Array(32).fill(9);
+        const seedBytes = await deriveSessionSeed(secret, nonce, "dev-1");
+        const seedHex = bytesToHex(seedBytes);
+        const exp = "c23ecd43f3c71e0743e7cf7a8069bf6434b82014dc3f34b144088e401b94ff4a";
+        const ok = addRow("2. Session Seed HKDF-SHA256", exp, seedHex, seedHex === exp);
+        if (!ok) allPassed = false;
+      } catch (e) {
+        addRow("2. Session Seed HKDF-SHA256", "success", "Error: " + e.message, false);
+        allPassed = false;
+      }
+
+      // Test 3: Ratchet Client Codes KAT 1..4 (seed = 32 bytes of 0x01)
+      const kat = [
+        { counter: 1, exp: "9d92b1b62f3ce7c8085a97cbc2bd5a0f" },
+        { counter: 2, exp: "46c68eb891454a8d6fd58bc536973ae8" },
+        { counter: 3, exp: "50a4af0ba54b4021832b5d78841fca8f" },
+        { counter: 4, exp: "9157fc331132170879a753437c015144" }
+      ];
+
+      const seedOnes = new Uint8Array(32).fill(1);
+      for (const item of kat) {
+        try {
+          const code = await clientCode(seedOnes, item.counter);
+          const ok = addRow(`3.${item.counter} Ratchet Code (Counter ${item.counter})`, item.exp, code, code === item.exp);
+          if (!ok) allPassed = false;
+        } catch (e) {
+          addRow(`3.${item.counter} Ratchet Code (Counter ${item.counter})`, item.exp, "Error: " + e.message, false);
+          allPassed = false;
+        }
+      }
+
+      // Test 4: WebCrypto Ed25519 Support & Signing
+      const edSupported = await isEd25519Supported();
+      if (!edSupported) {
+        addRow("4. WebCrypto Ed25519 Support", "Supported", "UNSUPPORTED BROWSER", false);
+        allPassed = false;
+      } else {
+        try {
+          // Dummy private key: 32 bytes of 0x42
+          const dummySk = "42".repeat(32);
+          const dummyNonce = "99".repeat(32);
+          const sig = await signNonce(dummySk, dummyNonce);
+          const ok = addRow("4. WebCrypto Ed25519 Sign", "64-byte signature (128 hex)", `${sig.length} hex chars`, sig.length === 128);
+          if (!ok) allPassed = false;
+        } catch (e) {
+          addRow("4. WebCrypto Ed25519 Sign", "success", "Error: " + e.message, false);
+          allPassed = false;
+        }
+      }
+
+      if (allPassed) {
+        overallBadge.textContent = "PASS";
+        overallBadge.className = "badge badge-pass";
+      } else {
+        overallBadge.textContent = "FAIL";
+        overallBadge.className = "badge badge-fail";
+      }
+    }
+
+    runTests();
+  </script>
+</body>
+</html>
