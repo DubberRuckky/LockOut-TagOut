@@ -2,10 +2,76 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LOTO Case Vault</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOTO Case Vault — Officer Authentication</title>
+  <link rel="stylesheet" href="/ui/styles.css">
 </head>
 <body>
-  <h1>LockOut-TagOut Vault</h1>
-  <p id="status">Status: Initializing</p>
+  <header>
+    <div class="brand">
+      <div>
+        <div class="brand-title">LockOut-TagOut Case Vault</div>
+        <div class="brand-sub">Zero-Trust Evidence Gateway &amp; Ledger</div>
+      </div>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      <span id="systemStateText">NORMAL</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="login-card">
+      <div class="form-panel">
+        <div class="panel-title">Officer Credentials</div>
+        
+        <div class="form-group">
+          <label for="officerId">Officer ID</label>
+          <input type="text" id="officerId" placeholder="e.g. alice" autocomplete="username" required>
+        </div>
+
+        <div class="form-group">
+          <label for="stationSelect">Police Station</label>
+          <select id="stationSelect">
+            <option value="station-central">Central Precinct — Cyber &amp; Forensics</option>
+            <option value="station-north">North Division — Serious Crimes</option>
+            <option value="station-south">South Command — Records Custody</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="passcode">Officer Passcode</label>
+          <input type="password" id="passcode" placeholder="Enter secure passcode" autocomplete="current-password" required>
+        </div>
+
+        <div class="form-group">
+          <label for="keyfileInput">Cryptographic Device Keyfile</label>
+          <input type="file" id="keyfileInput" accept=".json" required>
+        </div>
+
+        <div class="notice-box">
+          Your face image is recorded for security audit and kept for 30 days. Optical presence is mandatory for authentication.
+        </div>
+      </div>
+
+      <div class="camera-panel">
+        <div class="panel-title">Biometric Presence Feed</div>
+        <div class="video-container">
+          <video id="cameraFeed" autoplay playsinline muted></video>
+          <div class="camera-overlay"></div>
+        </div>
+        <div id="cameraStatus" class="camera-status status-init">
+          <span id="statusText">Initializing biometric scanner...</span>
+        </div>
+        <button id="signInBtn" class="primary-btn" disabled>Authenticate &amp; Sign In</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    LOTO Case Vault • Zero-Trust Biometric &amp; Shifting-Code Architecture • Localhost Enforced
+  </footer>
+
+  <script type="module" src="/ui/app.js"></script>
 </body>
 </html>

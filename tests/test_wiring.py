@@ -186,7 +186,7 @@ def main():
         # --- Static asset proxy check ---
         status, html = http_get(f"{GATEWAY_URL}/")
         assert status == 200, f"Expected 200 for static proxy, got {status}"
-        assert "LockOut-TagOut Vault" in str(html), "Expected frontend HTML from static proxy"
+        assert "LockOut-TagOut" in str(html), "Expected frontend HTML from static proxy"
         print("[CHECK STATIC PASS] GET / successfully proxies static frontend assets")
 
         # --- Check 4: Lock through rustPolish ---
