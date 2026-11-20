@@ -80,7 +80,7 @@ async fn locked_gateway_answers_503_except_status_and_restore() {
 async fn restricted_gateway_blocks_writes_to_api_only() {
     let env = make_env();
     let addr = serve(build_router(env.state.clone())).await;
-    trip(&env, Trigger::FailedHandshakes).await;
+    trip(&env, Trigger::BadCodes).await;
 
     assert_eq!(http(addr, "GET", "/health", "").await.0, 200);
     assert_eq!(http(addr, "POST", "/api/cases", "{}").await.0, 403);

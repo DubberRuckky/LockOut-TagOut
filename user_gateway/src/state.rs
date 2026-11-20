@@ -20,6 +20,12 @@ pub struct PendingNonce {
 /// old counters with wrong codes are BadCode (not Replay).
 pub const REPLAY_HISTORY_CAP: usize = 16;
 
+/// Maximum session lifetime (8 hours).
+pub const SESSION_MAX_AGE: Duration = Duration::from_secs(8 * 3600);
+
+/// Maximum concurrent active sessions.
+pub const MAX_SESSIONS: usize = 1000;
+
 /// A logged-in session. `seed` is the ratchet seed; `chain_key` is the hash-chain
 /// key for `last_counter` (starts equal to the seed at counter 0).
 #[derive(Clone)]
@@ -80,8 +86,17 @@ fn load_or_create_token(path: &std::path::Path) -> String {
 impl AppState {
     /// Also loads the saved lock state, so a restart can never unlock the system.
     pub fn new(config: Config, store: Store) -> SharedState {
+        // First-run initialization writes NORMAL; missing lock file afterwards means LOCKED
+        if !config.lock_path().exists() && !config.store_path().exists() {
+            let _ = lockout::persist_lock(&config.lock_path(), &LockInfo::normal());
+        }
         let mut live = Live::default();
         live.lock = lockout::load_lock(&config.lock_path());
+        for d in &store.data.devices {
+            if d.locked_out {
+                live.flagged.insert(d.device_id.clone());
+            }
+        }
         let token = load_or_create_token(&config.token_path());
         let (events, _first_receiver) = broadcast::channel(256);
         let http = reqwest::Client::builder()
@@ -103,6 +118,15 @@ impl AppState {
     /// and the error is returned (callers must then DENY the request).
     pub async fn refresh_store(&self) -> Res<()> {
         let fresh = Store::load(&self.config.store_path())?;
+        {
+            let mut live = self.live.lock().await;
+            live.flagged.clear();
+            for d in &fresh.data.devices {
+                if d.locked_out {
+                    live.flagged.insert(d.device_id.clone());
+                }
+            }
+        }
         *self.store.write().await = fresh;
         Ok(())
     }

@@ -60,7 +60,7 @@ pub async fn send_audit_event(state: &SharedState, mut event: serde_json::Value)
 }
 
 /// Call POST /internal/unseal on the upstream app.
-pub async fn unseal_upstream(state: &SharedState) {
+pub async fn unseal_upstream(state: SharedState) {
     let url = format!("{}/internal/unseal", state.config.upstream.trim_end_matches('/'));
     let body = serde_json::json!({ "time": now_unix() }).to_string();
     let res = state

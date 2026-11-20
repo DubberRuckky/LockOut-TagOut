@@ -1,3 +1,7 @@
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -7,11 +11,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Simple error type: a message string.
 pub type Res<T> = Result<T, String>;
 
+fn default_rank_tier() -> u8 {
+    1
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Officer {
     pub officer_id: String,
     pub revoked: bool,
     pub created_at: u64,
+    #[serde(default)]
+    pub passcode_hash: String,
+    #[serde(default = "default_rank_tier")]
+    pub rank_tier: u8,
 }
 
 /// What the SERVER keeps per device: public key + shared secret + config hash.
@@ -25,6 +37,29 @@ pub struct Device {
     pub config_hash_hex: String,
     pub revoked: bool,
     pub created_at: u64,
+    #[serde(default)]
+    pub locked_out: bool,
+    #[serde(default)]
+    pub failed_attempts: u32,
+}
+
+pub fn hash_passcode(passcode: &str) -> Res<String> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let hash = argon2
+        .hash_password(passcode.as_bytes(), &salt)
+        .map_err(|e| format!("passcode hashing failed: {e}"))?;
+    Ok(hash.to_string())
+}
+
+pub fn verify_passcode(passcode: &str, hash_str: &str) -> bool {
+    if hash_str.is_empty() {
+        return false;
+    }
+    match PasswordHash::new(hash_str) {
+        Ok(parsed_hash) => Argon2::default().verify_password(passcode.as_bytes(), &parsed_hash).is_ok(),
+        Err(_) => false,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -77,6 +112,10 @@ impl Store {
 
     /// Add a new officer together with their first device (in memory; call save()).
     pub fn add_user(&mut self, device: Device) -> Res<()> {
+        self.add_user_with_rank(device, String::new(), 1)
+    }
+
+    pub fn add_user_with_rank(&mut self, device: Device, passcode_hash: String, rank_tier: u8) -> Res<()> {
         validate_officer_id(&device.officer_id)?;
         if self.find_officer(&device.officer_id).is_some() {
             return Err(format!("officer {:?} already exists", device.officer_id));
@@ -88,9 +127,41 @@ impl Store {
             officer_id: device.officer_id.clone(),
             revoked: false,
             created_at: now_unix(),
+            passcode_hash,
+            rank_tier,
         });
         self.data.devices.push(device);
         Ok(())
+    }
+
+    pub fn reset_device(&mut self, device_id: &str) -> Res<()> {
+        let mut found = false;
+        for d in self.data.devices.iter_mut() {
+            if d.device_id == device_id {
+                d.locked_out = false;
+                d.failed_attempts = 0;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return Err(format!("device {:?} not found", device_id));
+        }
+        Ok(())
+    }
+
+    pub fn increment_device_failure(&mut self, device_id: &str) -> Res<(u32, bool)> {
+        for d in self.data.devices.iter_mut() {
+            if d.device_id == device_id {
+                d.failed_attempts = d.failed_attempts.saturating_add(1);
+                if d.failed_attempts >= 3 && !d.locked_out {
+                    d.locked_out = true;
+                    return Ok((d.failed_attempts, true));
+                }
+                return Ok((d.failed_attempts, false));
+            }
+        }
+        Err(format!("device {:?} not found", device_id))
     }
 
     /// Revoke an officer and all of their devices (in memory; call save()).

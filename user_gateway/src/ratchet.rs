@@ -147,6 +147,13 @@ fn check_in(live: &mut Live, headers: &HeaderMap) -> Checked {
             return (Verdict::Malformed, None, None);
         }
     };
+    if let Some(s) = live.sessions.get(&session_id) {
+        if std::time::Instant::now().saturating_duration_since(s.created_at) > crate::state::SESSION_MAX_AGE {
+            log::warn(&format!("request denied: session expired for device {:?}", s.device_id));
+            live.sessions.remove(&session_id);
+            return (Verdict::UnknownSession, None, None);
+        }
+    }
     let session = match live.sessions.get_mut(&session_id) {
         Some(s) => s,
         None => {

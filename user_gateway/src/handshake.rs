@@ -8,7 +8,6 @@ use serde::Deserialize;
 use std::time::{Duration, Instant};
 
 use crate::crypto;
-use crate::lockout::{self, Trigger};
 use crate::log;
 use crate::state::{Live, PendingNonce, Session, SharedState};
 use crate::store::{Device, Res};
@@ -32,6 +31,8 @@ pub struct LoginRequest {
     pub nonce: String,
     pub signature: String,
     pub config_hash: String,
+    #[serde(default)]
+    pub passcode: String,
 }
 
 // ---------- logic (no HTTP here, so tests can call it directly) ----------
@@ -65,14 +66,12 @@ pub async fn issue_challenge(state: &SharedState, device_id: &str, now: Instant)
 pub async fn login(state: &SharedState, req: &LoginRequest, now: Instant) -> Res<String> {
     let result = login_inner(state, req, now).await;
     match &result {
-        Ok(_) => state.publish("login_success", serde_json::json!({ "device_id": req.device_id })),
+        Ok(_) => state.publish("login_success", serde_json::json!({})),
         Err(_) => {
-            // Only echo the device id if it really exists; never reflect arbitrary client text.
             let known = state.store.read().await.find_device(&req.device_id).is_some();
-            let device = if known { Some(req.device_id.clone()) } else { None };
             state.publish(
                 "login_failure",
-                serde_json::json!({ "device_id": device, "known_device": known }),
+                serde_json::json!({ "known_device": known }),
             );
         }
     }
@@ -80,27 +79,38 @@ pub async fn login(state: &SharedState, req: &LoginRequest, now: Instant) -> Res
 }
 
 async fn login_inner(state: &SharedState, req: &LoginRequest, now: Instant) -> Res<String> {
-    let (device, officer_revoked) = {
+    let (device, officer_revoked, passcode_hash) = {
         let store = state.store.read().await;
         let device = match store.find_device(&req.device_id) {
             Some(d) => d.clone(),
             None => return Err("unknown device".to_string()),
         };
-        // A device whose officer is missing is treated as revoked (fail closed).
-        let revoked = match store.find_officer(&device.officer_id) {
-            Some(o) => o.revoked,
-            None => true,
+        let (revoked, hash) = match store.find_officer(&device.officer_id) {
+            Some(o) => (o.revoked, o.passcode_hash.clone()),
+            None => (true, String::new()),
         };
-        (device, revoked)
+        (device, revoked, hash)
     };
 
     let mut live = state.live.lock().await;
-    if live.flagged.contains(&device.device_id) {
-        return Err("device is flagged".to_string());
+    if !device.locked_out && device.failed_attempts == 0 {
+        live.flagged.remove(&device.device_id);
+        live.failures.remove(&device.device_id);
     }
 
-    match verify_login(&mut live, &device, officer_revoked, req, now) {
+    if device.locked_out || live.flagged.contains(&device.device_id) {
+        return Err("device is locked out".to_string());
+    }
+
+    match verify_login(&mut live, &device, officer_revoked, &passcode_hash, req, now) {
         Ok(seed) => {
+            live.failures.remove(&device.device_id);
+            // Prune expired sessions
+            live.sessions.retain(|_, s| now.saturating_duration_since(s.created_at) <= crate::state::SESSION_MAX_AGE);
+            if live.sessions.len() >= crate::state::MAX_SESSIONS {
+                return Err("too many active sessions".to_string());
+            }
+
             let session_id = crypto::random_hex(16);
             live.sessions.insert(
                 session_id.clone(),
@@ -119,7 +129,7 @@ async fn login_inner(state: &SharedState, req: &LoginRequest, now: Instant) -> R
             Ok(session_id)
         }
         Err(reason) => {
-            record_failure(state, &mut live, &device.device_id);
+            record_failure(state, &mut live, &device.device_id).await;
             Err(reason)
         }
     }
@@ -131,6 +141,7 @@ fn verify_login(
     live: &mut Live,
     device: &Device,
     officer_revoked: bool,
+    passcode_hash: &str,
     req: &LoginRequest,
     now: Instant,
 ) -> Res<[u8; 32]> {
@@ -138,8 +149,6 @@ fn verify_login(
         Some(p) => p,
         None => return Err("unknown, expired or already used nonce".to_string()),
     };
-    // A nonce issued to another device is NOT consumed, so nobody can burn
-    // someone else's nonce by guessing; the attempt still counts as a failure.
     if pending.device_id != device.device_id {
         return Err("nonce was issued to a different device".to_string());
     }
@@ -150,6 +159,13 @@ fn verify_login(
     }
     if device.revoked || officer_revoked {
         return Err("device or officer is revoked".to_string());
+    }
+
+    // Passcode check
+    if !passcode_hash.is_empty() {
+        if !crate::store::verify_passcode(&req.passcode, passcode_hash) {
+            return Err("bad passcode".to_string());
+        }
     }
 
     let nonce_bytes = hex::decode(&req.nonce).map_err(|_| "nonce is not hex".to_string())?;
@@ -178,16 +194,23 @@ fn verify_login(
     crypto::derive_session_seed(&secret, &nonce_bytes, &device.device_id)
 }
 
-/// Count a failed handshake. The third failure flags the device (once) and
-/// emits a lockout signal. Failures are never reset by a success.
-fn record_failure(state: &SharedState, live: &mut Live, device_id: &str) {
+/// Count a failed handshake on a device. The third failure locks THAT DEVICE
+/// (persisted in store.json) and never triggers system-wide lockout.
+async fn record_failure(state: &SharedState, live: &mut Live, device_id: &str) {
     let count = live.failures.entry(device_id.to_string()).or_insert(0);
     *count += 1;
     let total = *count;
     if total >= MAX_FAILURES && !live.flagged.contains(device_id) {
         live.flagged.insert(device_id.to_string());
-        log::warn(&format!("device {device_id:?} flagged after {total} failed handshakes"));
-        lockout::trigger(state, live, Trigger::FailedHandshakes);
+        log::warn(&format!("device {device_id:?} flagged in memory after {total} failed handshakes"));
+    }
+    // Persist to store.json
+    let mut store = state.store.write().await;
+    if let Ok((attempts, newly_locked)) = store.increment_device_failure(device_id) {
+        let _ = store.save();
+        if newly_locked {
+            log::warn(&format!("device {device_id:?} LOCKED OUT after {attempts} failed handshakes (device level)"));
+        }
     }
 }
 

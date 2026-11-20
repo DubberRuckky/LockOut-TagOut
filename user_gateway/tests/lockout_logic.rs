@@ -13,7 +13,7 @@ use lot_gateway::state::AppState;
 use lot_gateway::store::Store;
 
 fn info(state: LockState) -> LockInfo {
-    LockInfo { state, anomalies: 0, reason: "t".to_string(), since: 1 }
+    LockInfo { state, anomalies: 0, reason: "t".to_string(), since: 1, initiator: None }
 }
 
 // ---------- the pure transition table ----------
@@ -24,17 +24,21 @@ fn transition_table() {
     use Trigger::*;
     let cases = [
         (Normal, BadCodes, Restricted),
-        (Normal, FailedHandshakes, Restricted),
+        (Normal, FailedHandshakes, Normal),
         (Normal, Replay, Locked),
         (Normal, Manual, Locked),
         (Restricted, BadCodes, Locked),
-        (Restricted, FailedHandshakes, Locked),
+        (Restricted, FailedHandshakes, Restricted),
         (Restricted, Replay, Locked),
         (Restricted, Manual, Locked),
         (Locked, BadCodes, Locked),
         (Locked, FailedHandshakes, Locked),
         (Locked, Replay, Locked),
         (Locked, Manual, Locked),
+        (Tagout, BadCodes, Tagout),
+        (Tagout, FailedHandshakes, Tagout),
+        (Tagout, Replay, Tagout),
+        (Tagout, Manual, Tagout),
     ];
     for (from, trigger, expected) in cases {
         assert_eq!(next_state(&info(from), trigger).state, expected, "{from:?} + {trigger:?}");
@@ -89,9 +93,9 @@ fn lock_file_round_trip_missing_and_corrupt() {
     let dir = temp_dir("lockfile");
     let path = dir.join("lock-state.json");
 
-    assert_eq!(load_lock(&path).state, LockState::Normal); // fresh install
+    assert_eq!(load_lock(&path).state, LockState::Locked); // missing file means LOCKED (fail closed)
 
-    let saved = LockInfo { state: LockState::Locked, anomalies: 2, reason: "replay".to_string(), since: 42 };
+    let saved = LockInfo { state: LockState::Locked, anomalies: 2, reason: "replay".to_string(), since: 42, initiator: None };
     persist_lock(&path, &saved).unwrap();
     assert_eq!(load_lock(&path), saved);
 
@@ -146,7 +150,7 @@ async fn locking_drops_sessions_and_pending_nonces_and_saves_to_disk() {
 async fn state_changes_and_lockout_are_announced_in_order() {
     let env = make_env();
     let mut rx = env.state.events.subscribe();
-    trip(&env, Trigger::FailedHandshakes).await;
+    trip(&env, Trigger::BadCodes).await;
     trip(&env, Trigger::BadCodes).await;
 
     let mut events = Vec::new();
@@ -216,20 +220,18 @@ async fn second_anomaly_locks() {
     }
     assert_eq!(lock_state(&env).await, LockState::Restricted);
 
-    // the second anomaly: three failed handshakes on a device
-    let t0 = Instant::now();
+    // the second anomaly: another session with 3 bad codes
+    let (sid2, _nonce2) = new_session(&env).await;
+    let wrong2 = headers(&sid2, "1", &"cd".repeat(16));
     for _ in 0..3 {
-        let n = issue_challenge(&env.state, &env.device.device_id, t0).await.unwrap();
-        let mut req = make_req(&env.keyfile, &n);
-        req.signature = "00".repeat(64);
-        assert!(login(&env.state, &req, t0).await.is_err());
+        check_request(&env.state, &wrong2).await;
     }
     assert_eq!(lock_state(&env).await, LockState::Locked);
     drop(nonce);
 }
 
 #[tokio::test]
-async fn three_failed_handshakes_restrict() {
+async fn failure_on_one_device_never_changes_system_state() {
     let env = make_env();
     let t0 = Instant::now();
     for _ in 0..3 {
@@ -238,7 +240,10 @@ async fn three_failed_handshakes_restrict() {
         req.signature = "00".repeat(64);
         assert!(login(&env.state, &req, t0).await.is_err());
     }
-    assert_eq!(lock_state(&env).await, LockState::Restricted);
+    // Device is locked out...
+    assert!(env.state.store.read().await.find_device(&env.device.device_id).unwrap().locked_out);
+    // ...but system lock state NEVER changes (stays NORMAL)
+    assert_eq!(lock_state(&env).await, LockState::Normal);
 }
 
 #[tokio::test]
@@ -268,7 +273,7 @@ async fn login_events_success_and_failure() {
     let names: Vec<&str> = seen.iter().map(|e| e["event"].as_str().unwrap()).collect();
     assert_eq!(names, ["login_failure", "login_success", "login_failure"]);
     assert_eq!(seen[0]["known_device"], true);
-    assert_eq!(seen[0]["device_id"], env.device.device_id.as_str());
+    assert!(seen[0]["device_id"].is_null());
     assert_eq!(seen[2]["known_device"], false);
     assert!(seen[2]["device_id"].is_null());
     assert!(!seen[2].to_string().contains("script"));
@@ -304,7 +309,7 @@ fn manual_lock_file_keeps_anomaly_count_and_is_idempotent() {
         upstream: "http://127.0.0.1:9000".to_string(),
         data_dir: dir.clone(),
     };
-    let restricted = LockInfo { state: LockState::Restricted, anomalies: 1, reason: "bad_codes".to_string(), since: 5 };
+    let restricted = LockInfo { state: LockState::Restricted, anomalies: 1, reason: "bad_codes".to_string(), since: 5, initiator: None };
     persist_lock(&config.lock_path(), &restricted).unwrap();
 
     lockout::manual_lock_file(&config).unwrap();

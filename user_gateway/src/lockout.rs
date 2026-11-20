@@ -9,12 +9,15 @@ use crate::state::{Live, SharedState};
 use crate::store::{now_unix, write_private, Res};
 use crate::upstream;
 
+pub const TAGOUT_MIN_RANK: u8 = 4;
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum LockState {
     Normal,
     Restricted,
     Locked,
+    Tagout,
 }
 
 /// What is saved in lock-state.json. `reason` is a coarse code, never an id.
@@ -24,14 +27,28 @@ pub struct LockInfo {
     pub anomalies: u32,
     pub reason: String,
     pub since: u64,
+    #[serde(default)]
+    pub initiator: Option<String>,
 }
 
 impl LockInfo {
     pub fn normal() -> LockInfo {
-        LockInfo { state: LockState::Normal, anomalies: 0, reason: "none".to_string(), since: now_unix() }
+        LockInfo {
+            state: LockState::Normal,
+            anomalies: 0,
+            reason: "none".to_string(),
+            since: now_unix(),
+            initiator: None,
+        }
     }
-    fn locked(reason: &str) -> LockInfo {
-        LockInfo { state: LockState::Locked, anomalies: 0, reason: reason.to_string(), since: now_unix() }
+    pub fn locked(reason: &str) -> LockInfo {
+        LockInfo {
+            state: LockState::Locked,
+            anomalies: 0,
+            reason: reason.to_string(),
+            since: now_unix(),
+            initiator: None,
+        }
     }
 }
 
@@ -60,34 +77,39 @@ impl Trigger {
     }
 }
 
-/// The transition table (pure, no I/O). There is no way DOWN from here;
-/// only the M6 restore flow may return to NORMAL.
-///   LOCKED     + anything          -> LOCKED
-///   any state  + Manual or Replay  -> LOCKED
-///   RESTRICTED + any other anomaly -> LOCKED   (second anomaly)
-///   NORMAL     + BadCodes / FailedHandshakes   -> RESTRICTED (first anomaly)
+/// The transition table (pure, no I/O).
+/// Replay and Manual lock immediately.
+/// BadCodes in a session transitions NORMAL -> RESTRICTED -> LOCKED.
+/// Device-level FailedHandshakes never alter the system-wide state.
 pub fn next_state(current: &LockInfo, trigger: Trigger) -> LockInfo {
-    let anomalies = if trigger == Trigger::Manual {
-        current.anomalies
-    } else {
-        current.anomalies.saturating_add(1)
+    let anomalies = match trigger {
+        Trigger::Manual | Trigger::FailedHandshakes => current.anomalies,
+        _ => current.anomalies.saturating_add(1),
     };
     let state = match (current.state, trigger) {
         (LockState::Locked, _) => LockState::Locked,
+        (LockState::Tagout, _) => LockState::Tagout,
         (_, Trigger::Manual) | (_, Trigger::Replay) => LockState::Locked,
-        (LockState::Restricted, _) => LockState::Locked,
-        (LockState::Normal, _) => LockState::Restricted,
+        (LockState::Restricted, Trigger::BadCodes) => LockState::Locked,
+        (LockState::Restricted, _) => current.state,
+        (LockState::Normal, Trigger::BadCodes) => LockState::Restricted,
+        (LockState::Normal, _) => LockState::Normal,
     };
     let (reason, since) = if state == current.state {
         (current.reason.clone(), current.since)
     } else {
         (trigger.code().to_string(), now_unix())
     };
-    LockInfo { state, anomalies, reason, since }
+    LockInfo {
+        state,
+        anomalies,
+        reason,
+        since,
+        initiator: current.initiator.clone(),
+    }
 }
 
-/// Load the saved lock state. FAIL CLOSED: a missing file is a fresh install
-/// (NORMAL), but an unreadable or corrupt file means LOCKED.
+/// Load the saved lock state. FAIL CLOSED: a missing file means LOCKED.
 pub fn load_lock(path: &Path) -> LockInfo {
     match std::fs::read_to_string(path) {
         Ok(text) => match serde_json::from_str::<LockInfo>(&text) {
@@ -97,7 +119,10 @@ pub fn load_lock(path: &Path) -> LockInfo {
                 LockInfo::locked("lock_file_corrupt")
             }
         },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => LockInfo::normal(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            log::warn("lock state file missing, starting LOCKED (fail closed)");
+            LockInfo::locked("missing_lock_file")
+        }
         Err(e) => {
             log::warn(&format!("lock state file unreadable, starting LOCKED: {e}"));
             LockInfo::locked("lock_file_unreadable")
@@ -106,15 +131,16 @@ pub fn load_lock(path: &Path) -> LockInfo {
 }
 
 pub fn persist_lock(path: &Path, info: &LockInfo) -> Res<()> {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let bytes = serde_json::to_vec_pretty(info).map_err(|e| format!("cannot serialize lock state: {e}"))?;
     let tmp = path.with_extension("json.tmp");
     write_private(&tmp, &bytes, false)?;
     std::fs::rename(&tmp, path).map_err(|e| format!("cannot replace lock file {:?}: {e}", path))
 }
 
-/// Record an anomaly. Applies the transition table, saves to disk, announces
-/// the change, and on LOCKED: drops every session and nonce and calls the
-/// upstream seal. Called with the live mutex already held (so it never locks).
+/// Record an anomaly.
 pub fn trigger(state: &SharedState, live: &mut Live, t: Trigger) {
     live.lockout_signals.push(t.code().to_string());
     let old = live.lock.clone();
@@ -124,9 +150,23 @@ pub fn trigger(state: &SharedState, live: &mut Live, t: Trigger) {
         return;
     }
     live.lock = new.clone();
-    // If this save fails we stay locked in memory, but a restart could lose it.
     if let Err(e) = persist_lock(&state.config.lock_path(), &new) {
-        log::warn(&format!("CANNOT PERSIST LOCK STATE (restart may unlock): {e}"));
+        log::warn(&format!("CANNOT PERSIST LOCK STATE: {e}"));
+        if new.state == LockState::Locked || new.state == LockState::Tagout {
+            let path = state.config.lock_path();
+            let info = new.clone();
+            tokio::spawn(async move {
+                for attempt in 1..=5 {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    if let Err(err) = persist_lock(&path, &info) {
+                        log::warn(&format!("RETRY {attempt} TO PERSIST LOCK STATE FAILED: {err}"));
+                    } else {
+                        log::info("Background persist of lock state succeeded");
+                        break;
+                    }
+                }
+            });
+        }
     }
     if new.state == old.state {
         return;
@@ -135,12 +175,33 @@ pub fn trigger(state: &SharedState, live: &mut Live, t: Trigger) {
         "state_change",
         serde_json::json!({ "from": old.state, "to": new.state, "reason": t.code(), "anomalies": new.anomalies }),
     );
-    if new.state == LockState::Locked {
+    if new.state == LockState::Locked || new.state == LockState::Tagout {
         live.sessions.clear();
         live.nonces.clear();
         state.publish("lockout", serde_json::json!({ "reason": t.code() }));
         tokio::spawn(upstream::seal_with_retry(state.clone(), t.code().to_string()));
     }
+}
+
+pub fn trigger_tagout(state: &SharedState, live: &mut Live, initiator: &str) {
+    let new = LockInfo {
+        state: LockState::Tagout,
+        anomalies: live.lock.anomalies,
+        reason: "tagout".to_string(),
+        since: now_unix(),
+        initiator: Some(initiator.to_string()),
+    };
+    live.lock = new.clone();
+    let _ = persist_lock(&state.config.lock_path(), &new);
+    live.sessions.clear();
+    live.nonces.clear();
+    state.publish("state_change", serde_json::json!({
+        "from": "UNKNOWN",
+        "to": "TAGOUT",
+        "reason": "tagout",
+        "initiator": initiator
+    }));
+    tokio::spawn(upstream::seal_with_retry(state.clone(), "tagout".to_string()));
 }
 
 impl LockInfo {
@@ -149,18 +210,15 @@ impl LockInfo {
             LockState::Normal => "NORMAL",
             LockState::Restricted => "RESTRICTED",
             LockState::Locked => "LOCKED",
+            LockState::Tagout => "TAGOUT",
         }
     }
 }
 
-/// Paths still served while LOCKED. `/restore` is reserved for the M6 restore endpoint.
 fn allowed_when_locked(method: &Method, path: &str) -> bool {
     (method == Method::GET && path == "/status") || path == "/restore" || path.starts_with("/restore/")
 }
 
-/// Decide whether a request may proceed in the current state (None = proceed).
-/// LOCKED: 503 for everything except the allowed paths.
-/// RESTRICTED: only read-only methods on /api/*.
 pub fn gate_decision(info: &LockInfo, method: &Method, path: &str) -> Option<StatusCode> {
     match info.state {
         LockState::Normal => None,
@@ -172,7 +230,7 @@ pub fn gate_decision(info: &LockInfo, method: &Method, path: &str) -> Option<Sta
                 None
             }
         }
-        LockState::Locked => {
+        LockState::Locked | LockState::Tagout => {
             if allowed_when_locked(method, path) {
                 None
             } else {
@@ -182,8 +240,6 @@ pub fn gate_decision(info: &LockInfo, method: &Method, path: &str) -> Option<Sta
     }
 }
 
-/// Used by `lotoctl lock`: write LOCKED into the lock file. A running gateway
-/// notices within about a second (watch_lock_file); a stopped one starts LOCKED.
 pub fn manual_lock_file(config: &Config) -> Res<()> {
     let path = config.lock_path();
     let mut info = load_lock(&path);
@@ -196,25 +252,49 @@ pub fn manual_lock_file(config: &Config) -> Res<()> {
     persist_lock(&path, &info)
 }
 
-/// Background task: the lock file can only ESCALATE a running gateway to LOCKED.
+pub fn manual_tagout_file(config: &Config, initiator: &str) -> Res<()> {
+    let path = config.lock_path();
+    let old = load_lock(&path);
+    let new = LockInfo {
+        state: LockState::Tagout,
+        anomalies: old.anomalies,
+        reason: "tagout".to_string(),
+        since: now_unix(),
+        initiator: Some(initiator.to_string()),
+    };
+    persist_lock(&path, &new)
+}
+
 pub async fn watch_lock_file(state: SharedState) {
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let on_disk = load_lock(&state.config.lock_path());
-        if on_disk.state == LockState::Locked {
+        if on_disk.state == LockState::Locked || on_disk.state == LockState::Tagout {
             let mut live = state.live.lock().await;
-            if live.lock.state != LockState::Locked {
-                trigger(&state, &mut live, Trigger::Manual);
+            if live.lock.state != on_disk.state {
+                live.lock = on_disk.clone();
+                live.sessions.clear();
+                live.nonces.clear();
+                tokio::spawn(upstream::seal_with_retry(state.clone(), on_disk.reason.clone()));
+            }
+        } else if on_disk.state == LockState::Normal {
+            let mut live = state.live.lock().await;
+            if live.lock.state != LockState::Normal {
+                log::info("Restoring gateway to NORMAL state from disk");
+                live.lock = on_disk.clone();
+                tokio::spawn(upstream::unseal_upstream(state.clone()));
             }
         }
     }
 }
 
-/// At startup: if we come up LOCKED, ask the upstream to seal (it may have been missed).
 pub async fn seal_if_locked(state: SharedState) {
-    let locked = state.live.lock().await.lock.state == LockState::Locked;
+    let locked = {
+        let s = state.live.lock().await.lock.state;
+        s == LockState::Locked || s == LockState::Tagout
+    };
     if locked {
-        log::warn("starting in LOCKED state, requesting upstream seal");
+        log::warn("starting in LOCKED/TAGOUT state, requesting upstream seal");
         tokio::spawn(upstream::seal_with_retry(state.clone(), "startup_locked".to_string()));
     }
 }

@@ -28,6 +28,7 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/", get(static_proxy))
         .route("/ui", get(static_proxy))
         .route("/ui/*path", get(static_proxy))
+        .route("/api/tagout", post(api_tagout))
         .route("/api", axum::routing::any(api_proxy))
         .route("/api/*path", axum::routing::any(api_proxy))
         .layer(gate_layer)
@@ -167,9 +168,12 @@ async fn api_proxy(
         _ => return (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
     };
 
-    let lock_state = {
+    let (rank_tier, lock_state) = {
         let live = state.live.lock().await;
-        live.lock.state_name().to_string()
+        let ls = live.lock.state_name().to_string();
+        let store = state.store.read().await;
+        let tier = store.find_officer(&authed.officer_id).map(|o| o.rank_tier).unwrap_or(1);
+        (tier, ls)
     };
 
     let path = request.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or(request.uri().path());
@@ -195,7 +199,7 @@ async fn api_proxy(
         .header("x-officer-id", &authed.officer_id)
         .header("x-device-id", &authed.device_id)
         .header("x-session-id", &authed.session_id)
-        .header("x-rank-tier", "1")
+        .header("x-rank-tier", rank_tier.to_string())
         .header("x-lock-state", &lock_state)
         .body(body_bytes);
 
@@ -203,6 +207,37 @@ async fn api_proxy(
         Ok(resp) => forward_response(resp).await,
         Err(_) => (StatusCode::BAD_GATEWAY, "upstream unreachable").into_response(),
     }
+}
+
+async fn api_tagout(
+    State(state): State<SharedState>,
+    request: Request,
+) -> Response {
+    let verdict = ratchet::check_request(&state, request.headers()).await;
+    let authed = match verdict {
+        Verdict::Accepted(a) => a,
+        _ => return (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
+    };
+
+    let rank_tier = {
+        let store = state.store.read().await;
+        store.find_officer(&authed.officer_id).map(|o| o.rank_tier).unwrap_or(1)
+    };
+
+    if rank_tier < lockout::TAGOUT_MIN_RANK {
+        return (StatusCode::FORBIDDEN, "insufficient rank tier for tagout").into_response();
+    }
+
+    {
+        let mut live = state.live.lock().await;
+        lockout::trigger_tagout(&state, &mut live, &authed.officer_id);
+    }
+
+    Json(serde_json::json!({
+        "ok": true,
+        "state": "TAGOUT",
+        "initiator": authed.officer_id
+    })).into_response()
 }
 
 async fn forward_response(resp: reqwest::Response) -> Response {

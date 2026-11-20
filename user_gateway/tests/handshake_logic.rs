@@ -107,7 +107,8 @@ async fn three_failures_flag_device_once_and_block_even_valid_login() {
     {
         let live = env.state.live.lock().await;
         assert!(live.flagged.contains(&env.device.device_id));
-        assert_eq!(live.lockout_signals.len(), 1);
+        let store = env.state.store.read().await;
+        assert!(store.find_device(&env.device.device_id).unwrap().locked_out);
     }
     // Fully valid credentials are now refused.
     let nonce = issue_challenge(&env.state, &env.device.device_id, t0).await.unwrap();
@@ -115,7 +116,6 @@ async fn three_failures_flag_device_once_and_block_even_valid_login() {
     assert!(login(&env.state, &req, t0).await.is_err());
     let live = env.state.live.lock().await;
     assert!(live.sessions.is_empty());
-    assert_eq!(live.lockout_signals.len(), 1); // not emitted again
 }
 
 #[tokio::test]
@@ -131,6 +131,7 @@ async fn unknown_device_gets_nonce_but_nothing_is_stored_or_counted() {
         nonce,
         signature: "00".repeat(64),
         config_hash: crypto::config_hash_hex(DEFAULT_DEVICE_CONFIG),
+        passcode: String::new(),
     };
     assert!(login(&env.state, &req, t0).await.is_err());
     assert!(env.state.live.lock().await.failures.is_empty());
@@ -175,4 +176,49 @@ async fn pending_nonce_cap_is_enforced_and_expiry_frees_space() {
     assert!(issue_challenge(&env.state, &env.device.device_id, t0).await.is_err());
     let later = t0 + Duration::from_secs(31);
     assert!(issue_challenge(&env.state, &env.device.device_id, later).await.is_ok());
+}
+
+#[tokio::test]
+async fn passcode_verification_success_and_failure() {
+    let env = make_env();
+    let (device, keyfile) = crypto::new_device("dave", DEFAULT_DEVICE_CONFIG);
+    let hash = lot_gateway::store::hash_passcode("Secret123!").unwrap();
+    env.state.store.write().await.add_user_with_rank(device.clone(), hash, 1).unwrap();
+
+    let t0 = Instant::now();
+    // 1. Wrong passcode fails
+    let nonce = issue_challenge(&env.state, &device.device_id, t0).await.unwrap();
+    let mut req = make_req(&keyfile, &nonce);
+    req.passcode = "WrongPass".to_string();
+    assert!(login(&env.state, &req, t0).await.is_err());
+
+    // 2. Correct passcode succeeds
+    let nonce = issue_challenge(&env.state, &device.device_id, t0).await.unwrap();
+    let mut req = make_req(&keyfile, &nonce);
+    req.passcode = "Secret123!".to_string();
+    let res = login(&env.state, &req, t0).await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn device_reset_clears_lockout_and_allows_login() {
+    let env = make_env();
+    let t0 = Instant::now();
+    // 3 failed handshakes lock the device
+    for _ in 0..3 {
+        let nonce = issue_challenge(&env.state, &env.device.device_id, t0).await.unwrap();
+        let mut req = make_req(&env.keyfile, &nonce);
+        req.signature = "00".repeat(64);
+        assert!(login(&env.state, &req, t0).await.is_err());
+    }
+    assert!(env.state.store.read().await.find_device(&env.device.device_id).unwrap().locked_out);
+
+    // Reset device
+    env.state.store.write().await.reset_device(&env.device.device_id).unwrap();
+    assert!(!env.state.store.read().await.find_device(&env.device.device_id).unwrap().locked_out);
+
+    // Now login succeeds
+    let nonce = issue_challenge(&env.state, &env.device.device_id, t0).await.unwrap();
+    let req = make_req(&env.keyfile, &nonce);
+    assert!(login(&env.state, &req, t0).await.is_ok());
 }

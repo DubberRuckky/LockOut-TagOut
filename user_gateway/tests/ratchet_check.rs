@@ -235,3 +235,23 @@ async fn replay_older_than_stored_16_counts_as_bad_code() {
     // The system must NOT be locked from this
     assert_eq!(lock_state(&env).await, lot_gateway::lockout::LockState::Normal);
 }
+
+#[tokio::test]
+async fn session_expires_after_max_age() {
+    let env = make_env();
+    let (sid, nonce) = new_session(&env).await;
+
+    // Simulate session aging past SESSION_MAX_AGE (8 hours)
+    {
+        let mut live = env.state.live.lock().await;
+        let session = live.sessions.get_mut(&sid).unwrap();
+        session.created_at = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(8 * 3600 + 1))
+            .unwrap();
+    }
+
+    let h = valid_headers(&env, &nonce, &sid, 1);
+    assert_eq!(check_request(&env.state, &h).await, Verdict::UnknownSession);
+    // Expired session is pruned from live state
+    assert!(!env.state.live.lock().await.sessions.contains_key(&sid));
+}

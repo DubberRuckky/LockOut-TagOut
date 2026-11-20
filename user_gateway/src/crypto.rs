@@ -48,6 +48,8 @@ pub fn new_device(officer_id: &str, device_config: &str) -> (Device, Keyfile) {
         config_hash_hex: config_hash_hex(device_config),
         revoked: false,
         created_at: now_unix(),
+        locked_out: false,
+        failed_attempts: 0,
     };
 
     let keyfile = Keyfile {

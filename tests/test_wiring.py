@@ -79,6 +79,9 @@ def wait_port(url: str, timeout: float = 10.0) -> bool:
             with urllib.request.urlopen(req, timeout=1) as resp:
                 if resp.status in (200, 404, 503):
                     return True
+        except urllib.error.HTTPError as e:
+            if e.code in (200, 404, 503):
+                return True
         except Exception:
             pass
         time.sleep(0.1)
