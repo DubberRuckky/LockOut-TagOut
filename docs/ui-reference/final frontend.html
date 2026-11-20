@@ -1,0 +1,2557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOTO Case Vault — Zero-Trust Government Records Gateway</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Public Sans"', 'system-ui', 'sans-serif'],
+            display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+          },
+          colors: {
+            vault: {
+              canvas: '#FAF7F4',
+              card: '#FFFFFF',
+              subtle: '#F4ECE6',
+              border: '#E6D9CE',
+              primary: '#9A3412',
+              primaryHover: '#7C2D12',
+              plum: '#4A2545',
+              darkCanvas: '#140F12',
+              darkCard: '#1E161B',
+              darkSubtle: '#291E25',
+              darkBorder: '#3D2C36',
+              darkText: '#F7EFEA',
+              darkMuted: '#B8A2AB'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Public Sans', system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+    h1, h2, h3, h4, .font-display {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+    .font-mono, code, pre, .tabular {
+      font-family: 'IBM Plex Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(154, 52, 18, 0.25);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(154, 52, 18, 0.45);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#FAF7F4] text-stone-900 dark:bg-vault-darkCanvas dark:text-vault-darkText transition-colors duration-200 selection:bg-[#9A3412] selection:text-white">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- ======================================================================= -->
+  <!-- TOP HEADER BAR                                                          -->
+  <!-- ======================================================================= -->
+  <header class="sticky top-0 z-30 bg-white/95 dark:bg-[#100B0E]/95 border-b border-[#E6D9CE] dark:border-vault-darkBorder backdrop-blur">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+
+      <!-- Left Brand & Breadcrumb -->
+      <div class="flex items-center gap-3 min-w-0">
+        <button onclick="toggleMobileSidebar()" class="lg:hidden p-1.5 rounded-lg text-stone-600 dark:text-vault-darkMuted hover:text-stone-900 dark:hover:text-white hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        <a href="#" onclick="switchTab('records')" class="flex items-center gap-2.5 text-stone-900 dark:text-white group shrink-0">
+          <div class="w-8 h-8 rounded-full bg-[#9A3412] dark:bg-[#B45309] flex items-center justify-center text-white group-hover:bg-[#7C2D12] transition shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <span class="font-display font-bold text-sm text-stone-900 dark:text-white tracking-tight group-hover:text-[#9A3412] dark:group-hover:text-amber-300 transition">
+            LOTO Case Vault
+          </span>
+        </a>
+
+        <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-stone-500 dark:text-vault-darkMuted pl-2 border-l border-[#E6D9CE] dark:border-vault-darkBorder">
+          <span class="px-2.5 py-0.5 rounded-full bg-[#F4ECE6] dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-700 dark:text-vault-darkText font-semibold">
+            STN-BLR-04
+          </span>
+          <span class="text-stone-300 dark:text-vault-darkBorder">/</span>
+          <span id="header-breadcrumb-view" class="text-stone-700 dark:text-vault-darkText font-medium">Dashboard</span>
+        </div>
+      </div>
+
+      <!-- Right Controls -->
+      <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <div class="relative hidden md:block w-48 lg:w-64">
+          <svg class="w-3.5 h-3.5 text-stone-400 dark:text-vault-darkMuted absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input id="global-search-input" type="text" placeholder="Type / to search..." oninput="handleGlobalSearch(this.value)" class="w-full pl-8 pr-7 py-1.5 rounded-full text-xs font-mono bg-[#F4ECE6]/80 dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412] focus:ring-1 focus:ring-[#9A3412] transition" />
+          <kbd class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono px-1.5 py-0.2 rounded bg-white dark:bg-vault-darkCard border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-500 dark:text-vault-darkMuted">
+            /
+          </kbd>
+        </div>
+
+        <button onclick="openNewRecordModal()" title="File Primary Case Record" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#9A3412] hover:bg-[#7C2D12] dark:bg-[#B45309] dark:hover:bg-[#92400E] shadow-sm transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>New</span>
+        </button>
+
+        <div id="header-posture-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold tracking-wide transition-colors">
+          <span class="relative flex h-2 w-2">
+            <span id="header-posture-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"></span>
+            <span id="header-posture-dot" class="relative inline-flex rounded-full h-2 w-2"></span>
+          </span>
+          <span id="header-posture-text">Gateway: NORMAL</span>
+        </div>
+
+        <button onclick="resetDemoState()" title="Reset all demo records, logs & posture" class="p-1.5 rounded-lg text-stone-600 dark:text-vault-darkMuted hover:text-stone-900 dark:hover:text-white bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] border border-[#E6D9CE] dark:border-vault-darkBorder transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+
+        <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" class="p-1.5 rounded-lg text-stone-600 dark:text-vault-darkMuted hover:text-stone-900 dark:hover:text-white bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] border border-[#E6D9CE] dark:border-vault-darkBorder transition">
+          <svg id="icon-sun" class="w-4 h-4 hidden dark:block text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <svg id="icon-moon" class="w-4 h-4 block dark:hidden text-stone-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
+
+        <div id="header-user-pill" class="hidden items-center gap-2 pl-2 border-l border-[#E6D9CE] dark:border-vault-darkBorder">
+          <div class="w-7 h-7 rounded-full bg-[#9A3412] text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+            <span id="header-avatar-initials">RK</span>
+          </div>
+          <span id="header-user-rank" class="hidden lg:inline-block text-xs font-mono font-semibold text-stone-700 dark:text-vault-darkText">
+            OFC-104
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================================================================= -->
+  <!-- VIEW 1: ZERO-TRUST GATEWAY HANDSHAKE SIGN-IN (REFERENCE LAYOUT)         -->
+  <!-- ======================================================================= -->
+  <section id="auth-view" class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+
+      <!-- LEFT COLUMN (7 cols): Security Architecture Showcase & 2x2 Safety Grid -->
+      <div class="lg:col-span-7 bg-white dark:bg-vault-darkCard rounded-3xl border border-[#E6D9CE] dark:border-vault-darkBorder p-6 sm:p-9 shadow-[0_8px_30px_rgb(154,52,18,0.04)] flex flex-col justify-between space-y-6">
+        <div class="space-y-5">
+          <!-- Pill Tag -->
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FBF0EB] dark:bg-[#331B16] border border-[#F0D4C7] dark:border-[#6B3124] text-[#9A3412] dark:text-amber-300 text-[11px] font-mono font-bold tracking-wider uppercase">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            LOCKOUT-TAGOUT ZERO-TRUST ARCHITECTURE
+          </div>
+
+          <!-- Main Headline & Subtitle -->
+          <div class="space-y-2.5">
+            <h1 class="text-2xl sm:text-4xl font-display font-extrabold text-stone-900 dark:text-white tracking-tight leading-[1.15]">
+              Your secure space for confidential case files
+            </h1>
+            <p class="text-sm sm:text-base text-stone-500 dark:text-vault-darkMuted max-w-2xl leading-relaxed">
+              Store, verify and update case files with secure sign-in, role-based access and a 15-second approval lock.
+            </p>
+          </div>
+
+          <!-- Inner Soft Terracotta/Sand Gradient Hero Banner -->
+          <div class="rounded-2xl bg-gradient-to-r from-[#FDF3EE] via-[#FAF5F0] to-[#F7EAE3] dark:from-vault-darkSubtle dark:via-[#261A22] dark:to-[#301F28] border border-[#ECDAD0] dark:border-vault-darkBorder p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div class="space-y-2">
+              <div class="text-[11px] font-mono font-bold tracking-widest uppercase text-[#9A3412] dark:text-amber-300">
+                LOTO // VAULT
+              </div>
+              <div class="text-xl sm:text-2xl font-display font-extrabold text-[#3B1829] dark:text-white tracking-tight">
+                LOCK. TAG. SECURE.
+              </div>
+              <p class="text-xs sm:text-sm text-stone-600 dark:text-vault-darkMuted">
+                Confidential files. Controlled access.
+              </p>
+
+              <!-- 3 Status Pills -->
+              <div class="flex flex-wrap items-center gap-2 pt-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white dark:bg-vault-darkCard border border-[#E6D9CE] dark:border-vault-darkBorder text-[10px] font-mono font-bold text-stone-700 dark:text-vault-darkText shadow-2xs">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                  SEALED
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white dark:bg-vault-darkCard border border-[#E6D9CE] dark:border-vault-darkBorder text-[10px] font-mono font-bold text-stone-700 dark:text-vault-darkText shadow-2xs">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#9A3412]"></span>
+                  VERIFIED
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white dark:bg-vault-darkCard border border-[#E6D9CE] dark:border-vault-darkBorder text-[10px] font-mono font-bold text-stone-700 dark:text-vault-darkText shadow-2xs">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#6B2D5C]"></span>
+                  CONFIDENTIAL
+                </span>
+              </div>
+            </div>
+
+            <!-- Decorative Vault Door Graphic -->
+            <div class="shrink-0 self-center sm:self-auto">
+              <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white/85 dark:bg-vault-darkCard/90 border border-[#E6D9CE] dark:border-vault-darkBorder shadow-sm flex items-center justify-center relative">
+                <svg class="w-16 h-16 text-[#9A3412] dark:text-amber-300" viewBox="0 0 64 64" fill="none">
+                  <rect x="8" y="8" width="48" height="48" rx="10" stroke="currentColor" stroke-width="3.5" />
+                  <circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="3" />
+                  <circle cx="32" cy="32" r="4.5" fill="#D97706" stroke="currentColor" stroke-width="2" />
+                  <path d="M32 19V25M32 39V45M19 32H25M39 32H45M23 23L27 27M37 37L41 41M41 23L37 27M27 37L23 41" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+                  <rect x="52" y="20" width="5" height="7" rx="1.5" fill="currentColor" />
+                  <rect x="52" y="37" width="5" height="7" rx="1.5" fill="currentColor" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom 2x2 Grid: HOW YOUR FILES STAY SAFE -->
+        <div class="space-y-3 pt-1">
+          <div class="text-[11px] font-mono font-bold uppercase tracking-widest text-stone-400 dark:text-vault-darkMuted">
+            HOW YOUR FILES STAY SAFE
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <!-- Card 1 -->
+            <div class="p-4 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkSubtle/70 border border-[#E6D9CE] dark:border-vault-darkBorder space-y-1.5">
+              <div class="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase text-[#9A3412] dark:text-amber-300">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                SECURE SIGN-IN
+              </div>
+              <div class="text-sm font-display font-bold text-stone-900 dark:text-white">
+                Secure sign-in
+              </div>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted leading-relaxed">
+                A fresh security check links each session to this station.
+              </p>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="p-4 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkSubtle/70 border border-[#E6D9CE] dark:border-vault-darkBorder space-y-1.5">
+              <div class="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase text-[#6B2D5C] dark:text-rose-300">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                ACCESS ROLES
+              </div>
+              <div class="text-sm font-display font-bold text-stone-900 dark:text-white">
+                Upload · Supervisor approval
+              </div>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted leading-relaxed">
+                Staff can add files or request edits. Only Tier 4+ (Inspector or Superintendent) approves sealing &amp; changes.
+              </p>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="p-4 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkSubtle/70 border border-[#E6D9CE] dark:border-vault-darkBorder space-y-1.5">
+              <div class="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase text-amber-700 dark:text-amber-300">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                CHANGE APPROVAL
+              </div>
+              <div class="text-sm font-display font-bold text-stone-900 dark:text-white">
+                15-second safety lock
+              </div>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted leading-relaxed">
+                A short pause gives a supervisor time to stop an unsafe change.
+              </p>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="p-4 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkSubtle/70 border border-[#E6D9CE] dark:border-vault-darkBorder space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase text-[#7C2D12] dark:text-amber-200">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  LOCKOUT POSTURE &amp; ANOMALIES
+                </div>
+                <button id="auth-override-btn" onclick="superintendentOverride()" class="hidden px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-red-700 hover:bg-red-800 text-white transition">
+                  Override
+                </button>
+              </div>
+              <div id="panel-posture-summary" class="text-sm font-mono font-bold text-stone-900 dark:text-white">
+                NORMAL · Anomalies: 0/2
+              </div>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted leading-relaxed">
+                3 failed handshakes or invalid Station ID triggers immediate gateway LOCKDOWN.
+              </p>
+              <p id="last-gateway-transition" class="hidden">[2026-11-20 08:30:00 IST] POSTURE_VERIFIED -> NORMAL</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN (5 cols): Gateway Handshake Sign-In Form -->
+      <div class="lg:col-span-5 bg-white dark:bg-vault-darkCard rounded-3xl border border-[#E6D9CE] dark:border-vault-darkBorder p-6 sm:p-8 shadow-[0_8px_30px_rgb(154,52,18,0.04)] flex flex-col justify-between space-y-5">
+        <div class="space-y-5">
+          <!-- Card Header -->
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h2 class="text-xl font-display font-bold text-stone-900 dark:text-white tracking-tight">
+                Gateway Handshake Sign-In
+              </h2>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted mt-0.5">
+                Authenticate hardware badge &amp; cryptographic nonce
+              </p>
+            </div>
+            <span class="px-2.5 py-1 rounded-lg bg-[#F4ECE6] dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-[11px] font-mono font-semibold text-stone-600 dark:text-vault-darkMuted shrink-0">
+              TLS 1.3 · mTLS
+            </span>
+          </div>
+
+          <!-- Step 1: Cryptographic Challenge Nonce -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-stone-800 dark:text-vault-darkText">
+                1. Cryptographic Challenge Nonce
+              </span>
+              <button type="button" onclick="generateChallengeNonce(true)" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-[#9A3412] hover:bg-[#7C2D12] dark:bg-[#B45309] dark:hover:bg-[#92400E] text-white transition shadow-sm shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Request Challenge Nonce
+              </button>
+            </div>
+
+            <div id="nonce-strip" class="p-3.5 rounded-xl border border-dashed border-[#D8C5B8] dark:border-vault-darkBorder bg-[#FAF7F4] dark:bg-vault-darkCanvas text-xs font-mono transition-all">
+              <div id="nonce-empty" class="text-stone-400 dark:text-vault-darkMuted flex items-center justify-between gap-2">
+                <span>No active handshake nonce bound.</span>
+                <span>Awaiting request...</span>
+              </div>
+              <div id="nonce-active" class="hidden space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[#9A3412] dark:text-amber-300 font-bold flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    CHALLENGE NONCE BOUND
+                  </span>
+                  <span id="nonce-timestamp" class="text-[11px] text-stone-500 dark:text-vault-darkMuted"></span>
+                </div>
+                <div class="text-[11px] text-stone-800 dark:text-vault-darkText break-all">
+                  <span class="text-stone-400">NONCE:</span> <span id="nonce-hex" class="font-semibold"></span>
+                </div>
+                <div class="text-[11px] text-stone-500 dark:text-vault-darkMuted truncate">
+                  <span class="text-stone-400">ATTEST:</span> <span id="nonce-attest"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Station Roster Quick-Fill (Demo Credentials) -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-stone-800 dark:text-vault-darkText">
+                Station Roster Quick-Fill (Demo Credentials)
+              </span>
+              <span class="text-[11px] font-mono text-stone-400 dark:text-vault-darkMuted">
+                1-Click Populate
+              </span>
+            </div>
+
+            <!-- Top Row: 3 Cards -->
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" onclick="quickFillOfficer('OFC-104')" class="p-2.5 rounded-xl text-left border border-[#E6D9CE] dark:border-vault-darkBorder bg-[#FAF7F4] hover:bg-[#F4ECE6] dark:bg-vault-darkSubtle/60 dark:hover:bg-vault-darkSubtle transition">
+                <div class="text-xs font-bold text-stone-800 dark:text-white truncate">Constable</div>
+                <div class="text-[11px] font-mono text-stone-500 dark:text-vault-darkMuted mt-0.5">OFC-104</div>
+              </button>
+
+              <button type="button" onclick="quickFillOfficer('OFC-118')" class="p-2.5 rounded-xl text-left border border-[#E6D9CE] dark:border-vault-darkBorder bg-[#FAF7F4] hover:bg-[#F4ECE6] dark:bg-vault-darkSubtle/60 dark:hover:bg-vault-darkSubtle transition">
+                <div class="text-xs font-bold text-stone-800 dark:text-white truncate">Head Constable</div>
+                <div class="text-[11px] font-mono text-stone-500 dark:text-vault-darkMuted mt-0.5">OFC-118</div>
+              </button>
+
+              <button type="button" onclick="quickFillOfficer('OFC-152')" class="p-2.5 rounded-xl text-left border border-[#E6D9CE] dark:border-vault-darkBorder bg-[#FAF7F4] hover:bg-[#F4ECE6] dark:bg-vault-darkSubtle/60 dark:hover:bg-vault-darkSubtle transition">
+                <div class="text-xs font-bold text-stone-800 dark:text-white truncate">Sub-Inspector</div>
+                <div class="text-[11px] font-mono text-stone-500 dark:text-vault-darkMuted mt-0.5">OFC-152</div>
+              </button>
+            </div>
+
+            <!-- Bottom Row: 2 Highlighted Tier 4+ Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+              <button type="button" onclick="quickFillOfficer('OFC-201')" class="sm:col-span-5 p-2.5 rounded-xl text-left border border-rose-200 dark:border-rose-800/80 bg-rose-50/70 hover:bg-rose-100/70 dark:bg-rose-950/30 dark:hover:bg-rose-950/50 transition">
+                <div class="text-xs font-bold text-stone-900 dark:text-white">Inspector ★</div>
+                <div class="text-[11px] font-mono font-semibold text-[#881337] dark:text-rose-300 mt-0.5">OFC-201</div>
+              </button>
+
+              <button type="button" onclick="quickFillOfficer('OFC-300')" class="sm:col-span-7 p-2.5 rounded-xl text-left border border-amber-300/90 dark:border-amber-800/80 bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 transition">
+                <div class="text-xs font-bold text-stone-900 dark:text-white truncate">Superintendent (Override Authority) ★</div>
+                <div class="text-[11px] font-mono text-[#9A3412] dark:text-amber-300 mt-0.5">OFC-300 · Highest Clearance</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Sign-In Form -->
+          <form id="login-form" onsubmit="handleGatewaySignIn(event)" class="space-y-3.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="input-officer-id" class="block text-xs font-bold text-stone-800 dark:text-vault-darkText mb-1.5">
+                  Officer ID
+                </label>
+                <input id="input-officer-id" type="text" required placeholder="e.g. OFC-104" class="w-full px-4 py-2.5 rounded-full text-sm font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white focus:outline-none focus:border-[#9A3412] focus:ring-1 focus:ring-[#9A3412]" />
+              </div>
+
+              <div>
+                <label for="input-station-id" class="block text-xs font-bold text-stone-800 dark:text-vault-darkText mb-1.5">
+                  Office / Station ID
+                </label>
+                <input id="input-station-id" type="text" required value="STN-BLR-04" class="w-full px-4 py-2.5 rounded-full text-sm font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white focus:outline-none focus:border-[#9A3412] focus:ring-1 focus:ring-[#9A3412]" />
+              </div>
+            </div>
+
+            <div>
+              <label for="input-rank" class="block text-xs font-bold text-stone-800 dark:text-vault-darkText mb-1.5">
+                Officer Rank / Role
+              </label>
+              <select id="input-rank" class="w-full px-4 py-2.5 rounded-full text-sm bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white focus:outline-none focus:border-[#9A3412]">
+                <option value="Constable">Constable (Tier 1 · Primary Upload &amp; Propose)</option>
+                <option value="Head Constable">Head Constable (Tier 2 · Custody &amp; Evidence)</option>
+                <option value="Sub-Inspector">Sub-Inspector (Tier 3 · Case Investigation)</option>
+                <option value="Inspector">Inspector (Tier 4 · Seal &amp; LOTO Approver)</option>
+                <option value="Superintendent">Superintendent (Tier 5 · Seal Approver &amp; Override)</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="input-passcode" class="block text-xs font-bold text-stone-800 dark:text-vault-darkText mb-1.5">
+                Hardware Token Passcode
+              </label>
+              <div class="relative">
+                <input id="input-passcode" type="password" required placeholder="Enter station token passcode" class="w-full pl-4 pr-10 py-2.5 rounded-full text-sm font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white focus:outline-none focus:border-[#9A3412]" />
+                <button type="button" onclick="togglePasscodeVisibility()" aria-label="Toggle Passcode Visibility" class="absolute inset-y-0 right-0 px-3.5 flex items-center text-stone-400 hover:text-stone-700 dark:text-vault-darkMuted dark:hover:text-white">
+                  <svg id="eye-open" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <svg id="eye-closed" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div id="auth-error-box" class="hidden p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/80 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+              <svg class="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span id="auth-error-message">Authentication handshake rejected.</span>
+            </div>
+
+            <button type="submit" class="w-full py-3 px-5 rounded-full bg-[#9A3412] hover:bg-[#7C2D12] dark:bg-[#B45309] dark:hover:bg-[#92400E] text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition mt-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              Verify Nonce &amp; Enter Zero-Trust Vault
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================================================================= -->
+  <!-- VIEW 2: AUTHENTICATED WORKSPACE                                         -->
+  <!-- ======================================================================= -->
+  <section id="vault-view" class="hidden max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT SIDEBAR -->
+      <aside id="sidebar-drawer" class="lg:col-span-3 space-y-5 hidden lg:block transition-all">
+
+        <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 shadow-sm">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-full bg-[#FBF0EB] dark:bg-[#331B16] border border-[#F0D4C7] dark:border-[#6B3124] flex items-center justify-center text-[#9A3412] dark:text-amber-300 font-display font-bold text-lg shrink-0">
+              <span id="sidebar-avatar-initials">RK</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 id="sidebar-user-name" class="font-display font-bold text-sm text-stone-900 dark:text-white truncate">
+                Rohan Kulkarni
+              </h3>
+              <div class="flex items-center gap-1.5 mt-0.5">
+                <span id="sidebar-user-badge" class="font-mono text-xs text-stone-500 dark:text-vault-darkMuted font-semibold">OFC-104</span>
+                <span class="text-stone-300 dark:text-vault-darkBorder">·</span>
+                <span id="sidebar-user-rank" class="px-2 py-0.2 rounded-full text-[10px] font-semibold bg-[#FBF0EB] dark:bg-[#331B16] text-[#9A3412] dark:text-amber-300 border border-[#F0D4C7] dark:border-[#6B3124]">
+                  Constable
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-3 border-t border-[#F4ECE6] dark:border-vault-darkBorder space-y-1.5 text-xs font-mono text-stone-500 dark:text-vault-darkMuted">
+            <div class="flex justify-between">
+              <span>Clearance:</span>
+              <strong id="sidebar-clearance" class="text-stone-700 dark:text-vault-darkText">L1-FIELD</strong>
+            </div>
+            <div class="flex justify-between">
+              <span>Station Scope:</span>
+              <strong class="text-stone-700 dark:text-vault-darkText">STN-BLR-04</strong>
+            </div>
+            <div class="flex justify-between truncate">
+              <span>Token:</span>
+              <strong id="sidebar-token" class="text-stone-700 dark:text-vault-darkText truncate">ZT-9F8A...</strong>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-[#F4ECE6] dark:border-vault-darkBorder">
+            <button onclick="signOutGateway()" class="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] text-stone-800 dark:text-vault-darkText border border-[#E6D9CE] dark:border-vault-darkBorder transition flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Switch Role / Sign Out</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-2 shadow-sm space-y-1">
+          <button id="sidebar-nav-records" onclick="switchTab('records')" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition text-stone-700 dark:text-vault-darkText hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-[#9A3412] dark:text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+              <span>Case Records &amp; Vault</span>
+            </div>
+            <span id="nav-badge-records" class="px-2 py-0.5 rounded-full text-[11px] font-mono bg-[#F4ECE6] dark:bg-vault-darkSubtle text-stone-600 dark:text-vault-darkMuted border border-[#E6D9CE] dark:border-vault-darkBorder">4</span>
+          </button>
+
+          <button id="sidebar-nav-loto" onclick="switchTab('loto')" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition text-stone-700 dark:text-vault-darkText hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-amber-700 dark:text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>LOTO Amendments</span>
+            </div>
+            <span id="nav-badge-loto" class="px-2 py-0.5 rounded-full text-[11px] font-mono bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">1</span>
+          </button>
+
+          <button id="sidebar-nav-audit" onclick="switchTab('audit')" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition text-stone-700 dark:text-vault-darkText hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-[#6B2D5C] dark:text-rose-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Immutable Audit Ledger</span>
+            </div>
+            <span id="nav-badge-audit" class="px-2 py-0.5 rounded-full text-[11px] font-mono bg-[#F4ECE6] dark:bg-vault-darkSubtle text-stone-600 dark:text-vault-darkMuted border border-[#E6D9CE] dark:border-vault-darkBorder">3</span>
+          </button>
+        </div>
+
+        <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-stone-700 dark:text-vault-darkText">Top Case Repositories</span>
+            <span class="text-[10px] font-mono text-stone-400 dark:text-vault-darkMuted">Station Scope</span>
+          </div>
+          <div class="relative mb-3">
+            <input id="sidebar-repo-filter" type="text" placeholder="Find a case..." oninput="renderSidebarRepos(this.value)" class="w-full px-3 py-1.5 rounded-lg text-xs font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412]" />
+          </div>
+          <div id="sidebar-repo-list" class="space-y-1.5"></div>
+        </div>
+
+        <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 shadow-sm space-y-2">
+          <span class="text-xs font-mono font-bold uppercase tracking-wider text-stone-400 dark:text-vault-darkMuted block">
+            Gateway Telemetry Simulator
+          </span>
+          <div class="flex flex-col gap-1.5">
+            <button onclick="simulateAnomaly()" class="w-full py-2 px-3 rounded-xl text-xs font-mono font-medium bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/40 dark:hover:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800/70 transition text-left flex items-center justify-between">
+              <span>+ Inject Anomaly</span>
+              <span id="sidebar-anomaly-count" class="text-[10px] font-bold">0/2</span>
+            </button>
+            <button onclick="triggerManualLockout()" class="w-full py-2 px-3 rounded-xl text-xs font-mono font-medium bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 dark:bg-red-950/40 dark:hover:bg-red-950/70 dark:text-red-300 dark:border-red-800/70 transition text-left">
+              Trigger Emergency Lockout
+            </button>
+            <button id="sidebar-override-btn" onclick="superintendentOverride()" class="hidden w-full py-2 px-3 rounded-xl text-xs font-mono font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white shadow-sm transition">
+              Superintendent Clear Posture
+            </button>
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- CENTER MAIN CONTENT COLUMN -->
+      <main class="lg:col-span-6 space-y-5">
+
+        <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-5 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 id="greeting-header-title" class="text-lg font-display font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                Good day, <span id="greeting-user-name">Officer</span>!
+              </h2>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted mt-0.5">
+                Station <strong class="text-stone-700 dark:text-vault-darkText font-mono">STN-BLR-04</strong> Zero-Trust Command Console
+              </p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button onclick="openProposeAmendmentModal()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] text-stone-800 dark:text-vault-darkText border border-[#E6D9CE] dark:border-vault-darkBorder transition">
+                Propose Amendment
+              </button>
+              <button onclick="openNewRecordModal()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] dark:bg-[#B45309] dark:hover:bg-[#92400E] text-white shadow-sm transition">
+                + File Record
+              </button>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-stone-400 dark:text-vault-darkMuted font-mono shrink-0">Quick Vault Actions:</span>
+            <button onclick="openNewRecordModal()" class="px-3 py-1 rounded-lg bg-white dark:bg-vault-darkSubtle hover:bg-[#FBF0EB] dark:hover:bg-[#382933] border border-[#E6D9CE] dark:border-vault-darkBorder font-mono text-stone-700 dark:text-vault-darkText transition">
+              New Case Record
+            </button>
+            <button onclick="openProposeAmendmentModal()" class="px-3 py-1 rounded-lg bg-white dark:bg-vault-darkSubtle hover:bg-[#FBF0EB] dark:hover:bg-[#382933] border border-[#E6D9CE] dark:border-vault-darkBorder font-mono text-stone-700 dark:text-vault-darkText transition">
+              Propose Amendment
+            </button>
+            <button onclick="exportAuditCSV()" class="px-3 py-1 rounded-lg bg-white dark:bg-vault-darkSubtle hover:bg-[#FBF0EB] dark:hover:bg-[#382933] border border-[#E6D9CE] dark:border-vault-darkBorder font-mono text-stone-700 dark:text-vault-darkText transition">
+              Export Audit CSV
+            </button>
+          </div>
+        </div>
+
+        <div id="lockdown-warning-banner" class="hidden p-4 rounded-2xl bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-start gap-2.5">
+            <svg class="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h4 id="lockdown-banner-title" class="text-xs font-mono font-bold uppercase text-red-800 dark:text-red-200">
+                GATEWAY LOCKDOWN ACTIVE — WRITE MUTATIONS FROZEN
+              </h4>
+              <p id="lockdown-banner-desc" class="text-xs text-red-700 dark:text-red-300 mt-0.5">
+                Primary evidence uploads and LOTO amendment commits are suspended until a Superintendent clears the lockout posture.
+              </p>
+            </div>
+          </div>
+          <button onclick="superintendentOverride()" class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold bg-red-700 hover:bg-red-800 text-white shadow-sm transition">
+            Execute Superintendent Clear
+          </button>
+        </div>
+
+        <!-- TAB 1: CASE RECORDS -->
+        <div id="tab-panel-records" class="space-y-4">
+          <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-3.5 shadow-sm flex flex-col md:flex-row gap-3">
+            <div class="relative flex-1">
+              <svg class="w-4 h-4 text-stone-400 dark:text-vault-darkMuted absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input id="search-records" oninput="renderRecords()" type="text" placeholder="Search by Case ID, FIR, Title, or Custodian..." class="w-full pl-9 pr-3 py-2 rounded-xl text-xs font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412]" />
+            </div>
+
+            <div class="flex flex-wrap sm:flex-nowrap gap-2">
+              <select id="filter-status" onchange="renderRecords()" class="px-3 py-2 rounded-xl text-xs bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412]">
+                <option value="ALL">Status: All</option>
+                <option value="Sealed">Sealed</option>
+                <option value="Pending Seal Approval">Pending Seal Approval</option>
+                <option value="Pending Amendment">Pending Amendment</option>
+                <option value="Under Review">Under Review</option>
+              </select>
+
+              <select id="filter-classification" onchange="renderRecords()" class="px-3 py-2 rounded-xl text-xs bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412]">
+                <option value="ALL">Classification: All</option>
+                <option value="SECRET // NOFORN">SECRET // NOFORN</option>
+                <option value="CONFIDENTIAL // LAW">CONFIDENTIAL // LAW</option>
+                <option value="RESTRICTED // FORENSIC">RESTRICTED // FORENSIC</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="records-grid" class="space-y-3"></div>
+        </div>
+
+        <!-- TAB 2: LOTO QUEUE -->
+        <div id="tab-panel-loto" class="hidden space-y-4">
+          <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-display font-bold text-stone-900 dark:text-white">
+                LockOut-TagOut (LOTO) Dual-Control Amendment Queue
+              </h3>
+              <p class="text-xs text-stone-500 dark:text-vault-darkMuted mt-0.5">
+                Sealed records require Tier-4+ approval &amp; a mandatory 15-second LOTO cooling countdown.
+              </p>
+            </div>
+            <button onclick="openProposeAmendmentModal()" class="shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] dark:bg-[#B45309] dark:hover:bg-[#92400E] text-white transition">
+              Propose Amendment
+            </button>
+          </div>
+
+          <div id="loto-queue-list" class="space-y-4"></div>
+        </div>
+
+        <!-- TAB 3: AUDIT LEDGER -->
+        <div id="tab-panel-audit" class="hidden space-y-4">
+          <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-3.5 shadow-sm flex flex-col sm:flex-row gap-3 justify-between">
+            <div class="flex flex-1 flex-col sm:flex-row gap-2">
+              <input id="search-audit" oninput="renderAuditLedger()" type="text" placeholder="Filter ledger by officer, action, ID, or hash..." class="flex-1 px-3 py-2 rounded-xl text-xs font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412]" />
+              <select id="filter-audit-type" onchange="renderAuditLedger()" class="sm:w-44 px-3 py-2 rounded-xl text-xs bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-vault-darkText focus:outline-none focus:border-[#9A3412]">
+                <option value="ALL">All Categories</option>
+                <option value="AUTH">Auth &amp; Nonce</option>
+                <option value="RECORD">Record Filing</option>
+                <option value="LOTO">LOTO &amp; Cooldown</option>
+                <option value="SECURITY">Security &amp; Lockout</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button onclick="exportAuditJSON()" class="px-3 py-2 rounded-xl text-xs font-mono font-semibold bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] text-stone-800 dark:text-vault-darkText border border-[#E6D9CE] dark:border-vault-darkBorder transition">
+                Export JSON
+              </button>
+              <button onclick="exportAuditCSV()" class="px-3 py-2 rounded-xl text-xs font-mono font-semibold bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] text-stone-800 dark:text-vault-darkText border border-[#E6D9CE] dark:border-vault-darkBorder transition">
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder overflow-hidden shadow-sm">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-[#E6D9CE] dark:border-vault-darkBorder bg-[#FAF7F4] dark:bg-vault-darkSubtle text-[11px] font-mono font-semibold uppercase tracking-wider text-stone-500 dark:text-vault-darkMuted">
+                    <th class="py-2.5 px-3.5">Timestamp (IST)</th>
+                    <th class="py-2.5 px-3.5">Category</th>
+                    <th class="py-2.5 px-3.5">Actor / Rank</th>
+                    <th class="py-2.5 px-3.5">Event &amp; Telemetry</th>
+                    <th class="py-2.5 px-3.5">Chain Hash</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-table-body" class="divide-y divide-[#E6D9CE] dark:divide-vault-darkBorder text-xs"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+      <!-- RIGHT SIDEBAR -->
+      <aside class="lg:col-span-3 space-y-4">
+        <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3 border-b border-[#F4ECE6] dark:border-vault-darkBorder pb-2.5">
+            <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-stone-700 dark:text-vault-darkText flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-[#9A3412] animate-pulse"></span>
+              Latest from Gateway Telemetry
+            </h3>
+            <span class="text-[10px] font-mono text-stone-400 dark:text-vault-darkMuted">Real-time</span>
+          </div>
+
+          <div id="telemetry-timeline" class="space-y-4 relative pl-3 border-l border-[#E6D9CE] dark:border-vault-darkBorder ml-1.5 text-xs"></div>
+
+          <div class="mt-4 pt-3 border-t border-[#F4ECE6] dark:border-vault-darkBorder text-center">
+            <button onclick="switchTab('audit')" class="text-xs font-mono font-semibold text-[#9A3412] dark:text-amber-300 hover:underline">
+              View full ledger &rarr;
+            </button>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </section>
+
+  <!-- MODAL 1: INSPECT CASE RECORD -->
+  <div id="modal-inspect" class="fixed inset-0 z-50 hidden bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-vault-darkCard rounded-3xl border border-[#E6D9CE] dark:border-vault-darkBorder max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-[#E6D9CE] dark:border-vault-darkBorder flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span id="inspect-case-id" class="text-xs font-mono font-bold text-[#9A3412] dark:text-amber-300">CASE-2026-0891</span>
+            <span id="inspect-version" class="px-2 py-0.5 rounded-full text-[11px] font-mono bg-[#F4ECE6] dark:bg-vault-darkSubtle text-stone-600 dark:text-vault-darkMuted">v1.0</span>
+            <span id="inspect-status-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold">Sealed</span>
+          </div>
+          <h3 id="inspect-title" class="text-base font-display font-bold text-stone-900 dark:text-white truncate mt-0.5">
+            Case Title
+          </h3>
+        </div>
+        <button onclick="closeModal('modal-inspect')" class="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-white hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="inspect-body" class="p-6 overflow-y-auto space-y-5 text-sm"></div>
+
+      <div class="px-6 py-4 border-t border-[#E6D9CE] dark:border-vault-darkBorder bg-[#FAF7F4] dark:bg-vault-darkSubtle flex flex-wrap items-center justify-between gap-3">
+        <button id="inspect-verify-btn" onclick="verifyCurrentCaseHash()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold bg-[#4A2545] hover:bg-[#381B34] text-white shadow-sm transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Verify SHA-256 Seal Live
+        </button>
+        <div class="flex items-center gap-2">
+          <button id="inspect-amend-btn" onclick="openAmendmentForInspectedCase()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white shadow-sm transition">
+            Request LOTO Amendment
+          </button>
+          <button onclick="closeModal('modal-inspect')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-vault-darkCanvas text-stone-700 dark:text-vault-darkText border border-[#E6D9CE] dark:border-vault-darkBorder">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: FILE NEW PRIMARY RECORD -->
+  <div id="modal-new-record" class="fixed inset-0 z-50 hidden bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-vault-darkCard rounded-3xl border border-[#E6D9CE] dark:border-vault-darkBorder max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-[#E6D9CE] dark:border-vault-darkBorder flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-display font-bold text-stone-900 dark:text-white">
+            File Primary Case Record
+          </h3>
+          <p id="new-record-tier-notice" class="text-xs text-stone-500 dark:text-vault-darkMuted">
+            Tier 4+ seals immediately; records filed below Tier 4 stay Pending Tier 4+ Approval to Seal.
+          </p>
+        </div>
+        <button onclick="closeModal('modal-new-record')" class="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form onsubmit="handleCreateRecord(event)" class="p-6 overflow-y-auto space-y-4 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">FIR Number</label>
+            <input id="new-fir" type="text" required placeholder="FIR-BLR04-2026-412" class="w-full px-3.5 py-2 rounded-xl font-mono text-xs bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Classification Level</label>
+            <select id="new-classification" class="w-full px-3.5 py-2 rounded-xl text-xs font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white">
+              <option value="CONFIDENTIAL // LAW">CONFIDENTIAL // LAW</option>
+              <option value="RESTRICTED // FORENSIC">RESTRICTED // FORENSIC</option>
+              <option value="SECRET // NOFORN">SECRET // NOFORN</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Case Title</label>
+          <input id="new-title" type="text" required placeholder="e.g. Illegal Telecom SIM Box & VoIP Gateway Seizure" class="w-full px-3.5 py-2 rounded-xl text-sm bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Incident Summary &amp; Seizure Notes</label>
+          <textarea id="new-summary" rows="3" required placeholder="Detailed factual record of seizure, location coordinates, and primary forensic state..." class="w-full px-3.5 py-2 rounded-xl text-sm bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Evidence Manifest Items (comma-separated)</label>
+          <input id="new-evidence" type="text" required placeholder="e.g. 2x 32-Port GSM Gateways, 410x Pre-activated SIMs, Forensic Disk Image E01" class="w-full px-3.5 py-2 rounded-xl text-xs bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white" />
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal('modal-new-record')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#F4ECE6] dark:bg-vault-darkSubtle text-stone-700 dark:text-vault-darkText">
+            Cancel
+          </button>
+          <button id="new-record-submit-btn" type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white shadow-sm">
+            Submit Record
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: PROPOSE LOTO AMENDMENT -->
+  <div id="modal-propose-amendment" class="fixed inset-0 z-50 hidden bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-vault-darkCard rounded-3xl border border-[#E6D9CE] dark:border-vault-darkBorder max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-[#E6D9CE] dark:border-vault-darkBorder flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-display font-bold text-stone-900 dark:text-white">
+            Propose LOTO Sealed Record Amendment
+          </h3>
+          <p class="text-xs text-stone-500 dark:text-vault-darkMuted">
+            Enters AWAITING INSPECTOR+ APPROVAL queue · Requires 15s LOTO cooldown
+          </p>
+        </div>
+        <button onclick="closeModal('modal-propose-amendment')" class="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form onsubmit="handleProposeAmendment(event)" class="p-6 overflow-y-auto space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Target Case Record</label>
+          <select id="amend-case-select" onchange="prefillAmendmentFromCase()" class="w-full px-3.5 py-2 rounded-xl text-xs font-mono bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white"></select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Proposed Case Status</label>
+          <select id="amend-new-status" class="w-full px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white">
+            <option value="Sealed">Sealed (Maintain Seal with Amended Manifest)</option>
+            <option value="Under Review">Under Review (Forensic Lab Cross-Examination)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Statutory Justification / Reason for Tag-Out</label>
+          <input id="amend-reason" type="text" required placeholder="e.g. Attach FSL Bangalore memory dump hash & update custody transfer" class="w-full px-3.5 py-2 rounded-xl text-sm bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Updated Incident / Forensic Notes</label>
+          <textarea id="amend-notes" rows="3" required class="w-full px-3.5 py-2 rounded-xl text-sm bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder text-stone-900 dark:text-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 dark:text-vault-darkText mb-1">Attach Supporting PDF Document (Optional)</label>
+          <div class="p-3 rounded-xl border border-dashed border-[#D8C5B8] dark:border-vault-darkBorder bg-[#FAF7F4] dark:bg-vault-darkCanvas space-y-2">
+            <input id="amend-pdf-file" type="file" accept="application/pdf,.pdf" onchange="handleAmendmentPdfSelection(event)" class="block w-full text-xs text-stone-600 dark:text-vault-darkMuted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[#D8C5B8] dark:file:border-vault-darkBorder file:text-xs file:font-mono file:font-semibold file:bg-white dark:file:bg-vault-darkSubtle file:text-stone-800 dark:file:text-white hover:file:bg-[#F4ECE6] cursor-pointer" />
+            <div id="amend-pdf-preview" class="hidden p-2.5 rounded-lg bg-white dark:bg-vault-darkCard border border-[#E6D9CE] dark:border-vault-darkBorder text-xs font-mono flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div id="amend-pdf-name" class="font-semibold text-stone-800 dark:text-white truncate"></div>
+                <div id="amend-pdf-meta" class="text-[11px] text-stone-500 dark:text-vault-darkMuted truncate"></div>
+              </div>
+              <button type="button" onclick="clearAmendmentPdfSelection()" class="px-2 py-1 rounded text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 shrink-0">
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal('modal-propose-amendment')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#F4ECE6] dark:bg-vault-darkSubtle text-stone-700 dark:text-vault-darkText">
+            Cancel
+          </button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white shadow-sm">
+            Submit to LOTO Approval Queue
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: PDF EVIDENCE VIEWER -->
+  <div id="modal-pdf-viewer" class="fixed inset-0 z-50 hidden bg-stone-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-vault-darkCard rounded-3xl border border-[#E6D9CE] dark:border-vault-darkBorder max-w-4xl w-full h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-[#E6D9CE] dark:border-vault-darkBorder flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#FBF0EB] text-[#9A3412] border border-[#F0D4C7] dark:bg-[#331B16] dark:text-amber-300 dark:border-[#6B3124]">
+              PDF EVIDENCE DOSSIER
+            </span>
+            <span id="pdf-viewer-meta" class="text-xs font-mono text-stone-500 dark:text-vault-darkMuted truncate"></span>
+          </div>
+          <h3 id="pdf-viewer-title" class="text-base font-display font-bold text-stone-900 dark:text-white truncate mt-0.5">
+            Attached PDF Document
+          </h3>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <a id="pdf-viewer-download" download class="px-3.5 py-1.5 rounded-xl text-xs font-mono font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white transition">
+            Download PDF
+          </a>
+          <button onclick="closeModal('modal-pdf-viewer')" class="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-white hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="pdf-viewer-body" class="flex-1 bg-[#FAF7F4] dark:bg-vault-darkCanvas overflow-hidden flex flex-col"></div>
+    </div>
+  </div>
+
+  <script>
+    const STATION_SCOPE = 'STN-BLR-04';
+    const STORAGE_KEY = 'loto_case_vault_state_v3_terracotta';
+
+    const OFFICER_ROSTER = {
+      'OFC-104': { id: 'OFC-104', name: 'Rohan Kulkarni', rank: 'Constable', tier: 1, clearance: 'L1-FIELD', passcode: 'BLR104#ZT' },
+      'OFC-118': { id: 'OFC-118', name: 'Meera Nair', rank: 'Head Constable', tier: 2, clearance: 'L2-CUSTODY', passcode: 'BLR118#ZT' },
+      'OFC-152': { id: 'OFC-152', name: 'Vikramaditya Rao', rank: 'Sub-Inspector', tier: 3, clearance: 'L3-INVESTIGATOR', passcode: 'BLR152#ZT' },
+      'OFC-201': { id: 'OFC-201', name: 'Ananya Deshmukh', rank: 'Inspector', tier: 4, clearance: 'L4-APPROVER', passcode: 'BLR201#ZT' },
+      'OFC-300': { id: 'OFC-300', name: 'Arjun Rajagopal, IPS', rank: 'Superintendent', tier: 5, clearance: 'L5-COMMAND', passcode: 'BLR300#ZT' }
+    };
+
+    const INITIAL_CASES = [
+      {
+        id: 'CASE-2026-0891',
+        fir: 'FIR-BLR04-2026-0194',
+        title: 'Cyber Financial Fraud & Co-Located Server Seizure',
+        classification: 'SECRET // NOFORN',
+        status: 'Pending Amendment',
+        version: 'v1.0',
+        filedBy: 'Constable Rohan Kulkarni (OFC-104)',
+        filedAt: '2026-11-18 14:22:10 IST',
+        summary: 'Seizure of three rack-mounted blade servers and cold-storage hardware wallets linked to cross-border payment gateway laundering syndicate operating out of Koramangala.',
+        evidence: [
+          'EV-01: Dell PowerEdge R740 Server (Serial #9948-BLR)',
+          'EV-02: BitLocker NVMe Forensic Image (4.0 TB E01)',
+          'EV-03: 2x Ledger Nano X Hardware Wallets in Faraday Pouch'
+        ],
+        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        custody: [
+          { time: '2026-11-18 14:22:10 IST', actor: 'OFC-104 (Constable)', action: 'Primary record filed & cryptographically sealed (v1.0).' },
+          { time: '2026-11-19 10:05:44 IST', actor: 'OFC-152 (Sub-Inspector)', action: 'Verified Faraday seal integrity at Station Strongroom B.' }
+        ]
+      },
+      {
+        id: 'CASE-2026-0894',
+        fir: 'FIR-BLR04-2026-0201',
+        title: 'Narcotics Transit Interception — NH-44 Checkpoint',
+        classification: 'CONFIDENTIAL // LAW',
+        status: 'Sealed',
+        version: 'v1.2',
+        filedBy: 'Sub-Inspector Vikramaditya Rao (OFC-152)',
+        filedAt: '2026-11-17 03:45:19 IST',
+        summary: 'Interception of commercial cargo carrier transporting concealed synthetic contraband. Field reagent positive; samples dispatched to State Forensic Science Laboratory.',
+        evidence: [
+          'EV-01: 14.6 kg Sealed Contraband Parcel Batch #A1-A6',
+          'EV-02: Encrypted Satellite Sat-Phone & GPS Logger',
+          'EV-03: Weighbridge Calibration & Panchama Video Hash'
+        ],
+        sha256: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4',
+        custody: [
+          { time: '2026-11-17 03:45:19 IST', actor: 'OFC-152 (Sub-Inspector)', action: 'Primary seizure logged & sealed.' },
+          { time: '2026-11-17 11:30:00 IST', actor: 'OFC-201 (Inspector)', action: 'LOTO Dual-Signature commit approved after 15s cooldown (v1.2).' }
+        ]
+      },
+      {
+        id: 'CASE-2026-0902',
+        fir: 'FIR-BLR04-2026-0215',
+        title: 'Digital Forensics Chain-of-Custody & Cloud Log Audit',
+        classification: 'RESTRICTED // FORENSIC',
+        status: 'Under Review',
+        version: 'v1.0',
+        filedBy: 'Head Constable Meera Nair (OFC-118)',
+        filedAt: '2026-11-19 16:12:05 IST',
+        summary: 'Preservation of subpoenaed ISP BGP routing tables, RADIUS authentication logs, and mobile tower dump records pursuant to Section 63 BSA certification.',
+        evidence: [
+          'EV-01: Signed ISP CDR/IPDR Archive (PGP Verified)',
+          'EV-02: Section 63 BSA Hash Certificate #BLR-902',
+          'EV-03: Write-Blocked Optical Media Master Copy'
+        ],
+        sha256: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
+        custody: [
+          { time: '2026-11-19 16:12:05 IST', actor: 'OFC-118 (Head Constable)', action: 'Ingested forensic optical archive & generated initial SHA-256 seal.' }
+        ]
+      },
+      {
+        id: 'CASE-2026-0908',
+        fir: 'FIR-BLR04-2026-0229',
+        title: 'Municipal Infrastructure Tender & Ledger Tampering',
+        classification: 'CONFIDENTIAL // LAW',
+        status: 'Sealed',
+        version: 'v1.1',
+        filedBy: 'Inspector Ananya Deshmukh (OFC-201)',
+        filedAt: '2026-11-20 07:15:33 IST',
+        summary: 'Audit of manipulated e-procurement bid timestamps and forged digital signature certificates recovered from municipal contractor workstation.',
+        evidence: [
+          'EV-01: Seized USB e-Token DSC Dongles (3 Units)',
+          'EV-02: PostgreSQL WAL Transaction Log Snapshot',
+          'EV-03: Original Tender Audit Trail PDF/A'
+        ],
+        sha256: 'ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d',
+        custody: [
+          { time: '2026-11-20 07:15:33 IST', actor: 'OFC-201 (Inspector)', action: 'Filed primary anti-corruption case dossier & sealed record.' }
+        ]
+      }
+    ];
+
+    const INITIAL_AMENDMENTS = [
+      {
+        id: 'LOTO-AMD-401',
+        caseId: 'CASE-2026-0891',
+        caseTitle: 'Cyber Financial Fraud & Co-Located Server Seizure',
+        proposedBy: 'Rohan Kulkarni',
+        proposedById: 'OFC-104',
+        proposedByRank: 'Constable',
+        proposedAt: '2026-11-20 08:14:22 IST',
+        reason: 'Append FSL Bengaluru memory volatile dump SHA-256 checksum & update Strongroom transfer note',
+        newStatus: 'Sealed',
+        updatedSummary: 'Seizure of three rack-mounted blade servers and cold-storage hardware wallets linked to cross-border payment gateway laundering syndicate operating out of Koramangala. [FSL Memory Dump Verified & Indexed]',
+        extraEvidence: 'EV-04: FSL Volatile RAM Dump Image (ram_capture_0891.mem)',
+        pdfAttachment: {
+          name: 'FSL-Volatile-RAM-Report-0891.pdf',
+          sizeLabel: '418.4 KB',
+          sha256: '7c9e6679f636954139a3d7e231309f0up9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d'.slice(0, 64),
+          uploadedAt: '2026-11-20 08:14:22 IST',
+          dataUrl: null,
+          summaryNote: 'Sample forensic addendum attached with amendment LOTO-AMD-401. Upload any live .pdf file during amendment creation to render the interactive PDF preview for supervisory review.'
+        },
+        state: 'AWAITING_APPROVAL',
+        approvedBy: null,
+        cooldownEndsAt: null
+      }
+    ];
+
+    const INITIAL_AUDIT = [
+      {
+        id: 'AUD-9001',
+        timestamp: '2026-11-20 08:14:22 IST',
+        category: 'LOTO',
+        actor: 'Rohan Kulkarni (OFC-104 · Constable)',
+        event: 'Proposed LOTO Amendment LOTO-AMD-401 on CASE-2026-0891 -> Awaiting Inspector+ Approval',
+        hash: '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d'
+      },
+      {
+        id: 'AUD-9000',
+        timestamp: '2026-11-20 07:15:33 IST',
+        category: 'RECORD',
+        actor: 'Ananya Deshmukh (OFC-201 · Inspector)',
+        event: 'Filed & sealed primary record CASE-2026-0908 (FIR-BLR04-2026-0229)',
+        hash: 'ef2d127de37b942baad06145e54b0c61'
+      },
+      {
+        id: 'AUD-8999',
+        timestamp: '2026-11-20 07:00:00 IST',
+        category: 'SECURITY',
+        actor: 'SYSTEM GATEWAY (STN-BLR-04)',
+        event: 'Daily Zero-Trust posture self-test passed. Posture: NORMAL · Anomalies: 0/2',
+        hash: '11223344556677889900aabbccddeeff'
+      }
+    ];
+
+    let appState = {
+      theme: 'light',
+      posture: 'NORMAL',
+      anomalies: 0,
+      lastTransition: '[2026-11-20 08:30:00 IST] POSTURE_VERIFIED -> NORMAL · Integrity Checksum OK',
+      currentUser: null,
+      activeTab: 'records',
+      cases: [],
+      amendments: [],
+      auditLog: []
+    };
+
+    let activeNonce = null;
+    let inspectedCaseId = null;
+    let cooldownInterval = null;
+    let pendingAmendmentPdf = null;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          appState = { ...appState, ...parsed };
+        } else {
+          appState.cases = JSON.parse(JSON.stringify(INITIAL_CASES));
+          appState.amendments = JSON.parse(JSON.stringify(INITIAL_AMENDMENTS));
+          appState.auditLog = JSON.parse(JSON.stringify(INITIAL_AUDIT));
+          saveState();
+        }
+      } catch (e) {
+        appState.cases = JSON.parse(JSON.stringify(INITIAL_CASES));
+        appState.amendments = JSON.parse(JSON.stringify(INITIAL_AMENDMENTS));
+        appState.auditLog = JSON.parse(JSON.stringify(INITIAL_AUDIT));
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error('Failed to save state:', e);
+      }
+    }
+
+    function resetDemoState() {
+      localStorage.removeItem(STORAGE_KEY);
+      activeNonce = null;
+      appState = {
+        theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+        posture: 'NORMAL',
+        anomalies: 0,
+        lastTransition: `[${nowIST()}] FACTORY_RESET -> NORMAL · Demo State Restored`,
+        currentUser: null,
+        activeTab: 'records',
+        cases: JSON.parse(JSON.stringify(INITIAL_CASES)),
+        amendments: JSON.parse(JSON.stringify(INITIAL_AMENDMENTS)),
+        auditLog: JSON.parse(JSON.stringify(INITIAL_AUDIT))
+      };
+      saveState();
+      resetNonceUI();
+      renderAll();
+      showToast('Demo environment restored to clean initial state.', 'info');
+    }
+
+    function nowIST() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} IST`;
+    }
+
+    function randomHex(bytes = 16) {
+      const arr = new Uint8Array(bytes);
+      if (window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(arr);
+      } else {
+        for (let i = 0; i < bytes; i++) arr[i] = Math.floor(Math.random() * 256);
+      }
+      return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function computeSHA256(text) {
+      try {
+        if (window.crypto && window.crypto.subtle) {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(text);
+          const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+        }
+      } catch (e) {}
+      let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+      }
+      const part1 = (h1 >>> 0).toString(16).padStart(8, '0');
+      const part2 = (h2 >>> 0).toString(16).padStart(8, '0');
+      return (part1 + part2).repeat(4);
+    }
+
+    function logAudit(category, actor, event, hashSeed = '') {
+      const entry = {
+        id: 'AUD-' + Math.floor(1000 + Math.random() * 9000),
+        timestamp: nowIST(),
+        category,
+        actor,
+        event,
+        hash: (hashSeed || randomHex(16)).slice(0, 32)
+      };
+      appState.auditLog.unshift(entry);
+      saveState();
+      if (appState.currentUser) {
+        updateBadges();
+        renderTelemetryTimeline();
+        if (appState.activeTab === 'audit') renderAuditLedger();
+      }
+    }
+
+    function applyTheme() {
+      if (appState.theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+
+    function toggleTheme() {
+      appState.theme = appState.theme === 'dark' ? 'light' : 'dark';
+      applyTheme();
+      saveState();
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const colors = {
+        success: 'bg-[#4A2545] text-amber-100 border-[#6B3664]',
+        error: 'bg-red-950 text-red-100 border-red-700',
+        warning: 'bg-amber-950 text-amber-100 border-amber-700',
+        info: 'bg-[#9A3412] text-white border-[#7C2D12]'
+      };
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto p-3.5 rounded-2xl border shadow-lg text-xs font-medium flex items-center justify-between gap-3 transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.innerHTML = `
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white shrink-0 text-sm">&times;</button>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+      }, 4500);
+    }
+
+    function updatePostureUI() {
+      const badge = document.getElementById('header-posture-badge');
+      const ping = document.getElementById('header-posture-ping');
+      const dot = document.getElementById('header-posture-dot');
+      const text = document.getElementById('header-posture-text');
+      const panelSummary = document.getElementById('panel-posture-summary');
+      const lastTransEl = document.getElementById('last-gateway-transition');
+      const authOverrideBtn = document.getElementById('auth-override-btn');
+      const sidebarOverrideBtn = document.getElementById('sidebar-override-btn');
+      const lockdownBanner = document.getElementById('lockdown-warning-banner');
+      const sidebarAnomalyCount = document.getElementById('sidebar-anomaly-count');
+
+      badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold tracking-wide transition-colors';
+
+      if (appState.posture === 'NORMAL') {
+        badge.classList.add('bg-[#FBF0EB]', 'text-[#9A3412]', 'border-[#F0D4C7]', 'dark:bg-[#331B16]', 'dark:text-amber-300', 'dark:border-[#6B3124]');
+        ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75';
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-[#9A3412] dark:bg-amber-400';
+      } else if (appState.posture === 'RESTRICTED') {
+        badge.classList.add('bg-amber-50', 'text-amber-900', 'border-amber-200', 'dark:bg-amber-950/50', 'dark:text-amber-300', 'dark:border-amber-800/80');
+        ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+      } else {
+        badge.classList.add('bg-red-50', 'text-red-800', 'border-red-200', 'dark:bg-red-950/60', 'dark:text-red-300', 'dark:border-red-800');
+        ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75';
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-600';
+      }
+
+      text.textContent = `Gateway: ${appState.posture}`;
+      if (panelSummary) panelSummary.textContent = `${appState.posture} · Anomalies: ${appState.anomalies}/2`;
+      if (lastTransEl) lastTransEl.textContent = appState.lastTransition;
+      if (sidebarAnomalyCount) sidebarAnomalyCount.textContent = `${appState.anomalies}/2`;
+
+      const isLockedOrRestricted = appState.posture !== 'NORMAL';
+      if (authOverrideBtn) authOverrideBtn.classList.toggle('hidden', !isLockedOrRestricted);
+      if (sidebarOverrideBtn) sidebarOverrideBtn.classList.toggle('hidden', !isLockedOrRestricted);
+      if (lockdownBanner) {
+        lockdownBanner.classList.toggle('hidden', !isLockedOrRestricted);
+        if (isLockedOrRestricted) {
+          document.getElementById('lockdown-banner-title').textContent =
+            appState.posture === 'LOCKDOWN'
+              ? 'GATEWAY LOCKDOWN ACTIVE — WRITE MUTATIONS FROZEN'
+              : 'GATEWAY RESTRICTED POSTURE — ELEVATED ANOMALY THRESHOLD';
+        }
+      }
+    }
+
+    function recordSecurityAnomaly(reason) {
+      appState.anomalies += 1;
+      const prevPosture = appState.posture;
+      if (appState.anomalies >= 3) {
+        appState.posture = 'LOCKDOWN';
+      } else if (appState.anomalies >= 1) {
+        appState.posture = 'RESTRICTED';
+      }
+      appState.lastTransition = `[${nowIST()}] ${prevPosture} -> ${appState.posture} · ${reason}`;
+      saveState();
+      updatePostureUI();
+      logAudit('SECURITY', appState.currentUser ? `${appState.currentUser.name} (${appState.currentUser.id})` : 'UNAUTHENTICATED_CLIENT', `Anomaly #${appState.anomalies}: ${reason} (Posture: ${appState.posture})`);
+    }
+
+    function simulateAnomaly() {
+      recordSecurityAnomaly('Simulated telemetry anomaly injected via Gateway Console');
+      showToast(`Security anomaly recorded. Gateway posture: ${appState.posture}`, 'warning');
+    }
+
+    function triggerManualLockout() {
+      appState.anomalies = 3;
+      const prev = appState.posture;
+      appState.posture = 'LOCKDOWN';
+      appState.lastTransition = `[${nowIST()}] ${prev} -> LOCKDOWN · Manual Emergency LOTO Lockout Triggered`;
+      saveState();
+      updatePostureUI();
+      logAudit('SECURITY', appState.currentUser ? `${appState.currentUser.name} (${appState.currentUser.id})` : 'COMMAND', 'Manual LOTO Emergency Lockdown engaged.');
+      showToast('Emergency LOTO Lockdown engaged! Write operations frozen.', 'error');
+    }
+
+    function superintendentOverride() {
+      const prev = appState.posture;
+      appState.anomalies = 0;
+      appState.posture = 'NORMAL';
+      appState.lastTransition = `[${nowIST()}] ${prev} -> NORMAL · Superintendent Override Cleared Lockout`;
+      saveState();
+      updatePostureUI();
+      document.getElementById('auth-error-box').classList.add('hidden');
+      logAudit('SECURITY', 'OFC-300 (Superintendent Override)', `Cleared ${prev} posture and reset anomaly counter to 0/2.`);
+      showToast('Superintendent Override executed. Gateway posture restored to NORMAL.', 'success');
+    }
+
+    function generateChallengeNonce(notify = false) {
+      const hex = randomHex(16).toUpperCase();
+      const attest = 'TPM2-' + randomHex(8).toUpperCase();
+      const ts = nowIST();
+      activeNonce = { hex, attest, ts };
+
+      document.getElementById('nonce-empty').classList.add('hidden');
+      document.getElementById('nonce-active').classList.remove('hidden');
+      document.getElementById('nonce-hex').textContent = hex;
+      document.getElementById('nonce-attest').textContent = attest;
+      document.getElementById('nonce-timestamp').textContent = ts;
+
+      const strip = document.getElementById('nonce-strip');
+      strip.classList.remove('border-dashed', 'border-[#D8C5B8]', 'dark:border-vault-darkBorder');
+      strip.classList.add('border-solid', 'border-[#9A3412]', 'dark:border-amber-600', 'bg-[#FBF0EB]/60', 'dark:bg-[#331B16]/40');
+
+      logAudit('AUTH', 'GATEWAY_HANDSHAKE', `Issued cryptographic challenge nonce ${hex.slice(0, 12)}...`);
+      if (notify) {
+        showToast('Cryptographic Challenge Nonce generated and bound to handshake.', 'success');
+      }
+    }
+
+    function resetNonceUI() {
+      activeNonce = null;
+      document.getElementById('nonce-empty').classList.remove('hidden');
+      document.getElementById('nonce-active').classList.add('hidden');
+      const strip = document.getElementById('nonce-strip');
+      strip.classList.add('border-dashed', 'border-[#D8C5B8]', 'dark:border-vault-darkBorder');
+      strip.classList.remove('border-solid', 'border-[#9A3412]', 'dark:border-amber-600', 'bg-[#FBF0EB]/60', 'dark:bg-[#331B16]/40');
+    }
+
+    function quickFillOfficer(officerId) {
+      const officer = OFFICER_ROSTER[officerId];
+      if (!officer) return;
+      document.getElementById('input-officer-id').value = officer.id;
+      document.getElementById('input-passcode').value = officer.passcode;
+      document.getElementById('input-station-id').value = STATION_SCOPE;
+      document.getElementById('input-rank').value = officer.rank;
+      document.getElementById('auth-error-box').classList.add('hidden');
+
+      if (!activeNonce) {
+        generateChallengeNonce(false);
+      }
+      showToast(`Populated ${officer.rank} (${officer.id}) & bound Challenge Nonce.`, 'info');
+    }
+
+    function togglePasscodeVisibility() {
+      const input = document.getElementById('input-passcode');
+      const eyeOpen = document.getElementById('eye-open');
+      const eyeClosed = document.getElementById('eye-closed');
+      if (input.type === 'password') {
+        input.type = 'text';
+        eyeOpen.classList.add('hidden');
+        eyeClosed.classList.remove('hidden');
+      } else {
+        input.type = 'password';
+        eyeOpen.classList.remove('hidden');
+        eyeClosed.classList.add('hidden');
+      }
+    }
+
+    function showAuthError(msg) {
+      const box = document.getElementById('auth-error-box');
+      document.getElementById('auth-error-message').textContent = msg;
+      box.classList.remove('hidden');
+    }
+
+    function handleGatewaySignIn(e) {
+      e.preventDefault();
+      const officerId = document.getElementById('input-officer-id').value.trim().toUpperCase();
+      const stationId = document.getElementById('input-station-id').value.trim().toUpperCase();
+      const rank = document.getElementById('input-rank').value;
+      const passcode = document.getElementById('input-passcode').value;
+
+      if (!activeNonce) {
+        showAuthError('Handshake rejected: Request a Cryptographic Challenge Nonce before authenticating.');
+        return;
+      }
+
+      if (appState.posture === 'LOCKDOWN' && officerId !== 'OFC-300') {
+        showAuthError('GATEWAY IN LOCKDOWN: Only Superintendent (OFC-300) or Superintendent Override may clear lockout.');
+        return;
+      }
+
+      if (stationId !== STATION_SCOPE) {
+        recordSecurityAnomaly(`Station scope mismatch (${stationId} !== ${STATION_SCOPE})`);
+        showAuthError(`Zero-Trust Scope Violation: Station "${stationId}" unauthorized for ${STATION_SCOPE}. Anomaly logged (${appState.anomalies}/2).`);
+        return;
+      }
+
+      const officer = OFFICER_ROSTER[officerId];
+      if (!officer || officer.passcode !== passcode || officer.rank !== rank) {
+        recordSecurityAnomaly(`Failed credential/rank attestation for Officer ID "${officerId}"`);
+        showAuthError(`Credential or Rank mismatch for ${officerId || 'UNKNOWN'}. Anomaly logged (${appState.anomalies}/2).`);
+        return;
+      }
+
+      document.getElementById('auth-error-box').classList.add('hidden');
+      const sessionToken = 'ZT-' + randomHex(4).toUpperCase() + '-' + activeNonce.hex.slice(0, 6);
+      appState.currentUser = {
+        ...officer,
+        stationId,
+        sessionToken,
+        signedInAt: nowIST()
+      };
+      saveState();
+
+      logAudit('AUTH', `${officer.name} (${officer.id} · ${officer.rank})`, `Authenticated mTLS session ${sessionToken} via nonce ${activeNonce.hex.slice(0, 10)}...`);
+      showToast(`Authenticated as ${officer.rank} ${officer.name} (${officer.id})`, 'success');
+      renderAll();
+    }
+
+    function signOutGateway() {
+      if (appState.currentUser) {
+        logAudit('AUTH', `${appState.currentUser.name} (${appState.currentUser.id})`, `Terminated Zero-Trust session ${appState.currentUser.sessionToken}`);
+      }
+      appState.currentUser = null;
+      resetNonceUI();
+      saveState();
+      renderAll();
+      showToast('Signed out of LOTO Case Vault.', 'info');
+    }
+
+    function quickSwitchToInspector() {
+      const inspector = OFFICER_ROSTER['OFC-201'];
+      const sessionToken = 'ZT-' + randomHex(4).toUpperCase() + '-INSP201';
+      appState.currentUser = {
+        ...inspector,
+        stationId: STATION_SCOPE,
+        sessionToken,
+        signedInAt: nowIST()
+      };
+      saveState();
+      logAudit('AUTH', `${inspector.name} (${inspector.id} · ${inspector.rank})`, `Quick-switched supervisory session ${sessionToken} for Tier 4+ review`);
+      renderAll();
+      showToast('Switched session to Inspector Ananya Deshmukh (OFC-201).', 'success');
+    }
+
+    function toggleMobileSidebar() {
+      const drawer = document.getElementById('sidebar-drawer');
+      drawer.classList.toggle('hidden');
+    }
+
+    function switchTab(tabName) {
+      appState.activeTab = tabName;
+      saveState();
+
+      const tabs = ['records', 'loto', 'audit'];
+      tabs.forEach((t) => {
+        const panel = document.getElementById(`tab-panel-${t}`);
+        const navBtn = document.getElementById(`sidebar-nav-${t}`);
+        if (t === tabName) {
+          panel.classList.remove('hidden');
+          if (navBtn) {
+            navBtn.className = 'w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition bg-[#9A3412] text-white dark:bg-[#B45309] dark:text-white shadow-sm';
+          }
+        } else {
+          panel.classList.add('hidden');
+          if (navBtn) {
+            navBtn.className = 'w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition text-stone-700 dark:text-vault-darkText hover:bg-[#F4ECE6] dark:hover:bg-vault-darkSubtle';
+          }
+        }
+      });
+
+      const breadcrumbNames = {
+        records: 'Case Vault',
+        loto: 'LOTO Queue',
+        audit: 'Audit Ledger'
+      };
+      document.getElementById('header-breadcrumb-view').textContent = breadcrumbNames[tabName] || 'Dashboard';
+
+      if (tabName === 'records') renderRecords();
+      if (tabName === 'loto') renderLotoQueue();
+      if (tabName === 'audit') renderAuditLedger();
+    }
+
+    function updateBadges() {
+      document.getElementById('nav-badge-records').textContent = appState.cases.length;
+      const activeAmendments = appState.amendments.filter((a) => a.state !== 'COMMITTED' && a.state !== 'VETOED').length;
+      document.getElementById('nav-badge-loto').textContent = activeAmendments;
+      document.getElementById('nav-badge-audit').textContent = appState.auditLog.length;
+    }
+
+    function renderSidebarRepos(filterText = '') {
+      const container = document.getElementById('sidebar-repo-list');
+      const q = filterText.toLowerCase();
+      const filtered = appState.cases.filter((c) => c.id.toLowerCase().includes(q) || c.title.toLowerCase().includes(q));
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-[11px] font-mono text-stone-400 dark:text-vault-darkMuted p-1">No matching cases</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((c) => `
+        <button onclick="openInspectModal('${c.id}')" class="w-full text-left p-2 rounded-lg hover:bg-[#FBF0EB] dark:hover:bg-vault-darkSubtle transition flex items-center justify-between group">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <svg class="w-3.5 h-3.5 text-stone-400 dark:text-vault-darkMuted group-hover:text-[#9A3412] dark:group-hover:text-amber-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <span class="text-xs font-mono font-semibold text-stone-800 dark:text-vault-darkText group-hover:text-[#9A3412] dark:group-hover:text-amber-300 truncate">${STATION_SCOPE}/${c.id}</span>
+          </div>
+          <span class="text-[10px] font-mono text-stone-400 dark:text-vault-darkMuted shrink-0">${c.version}</span>
+        </button>
+      `).join('');
+    }
+
+    function renderTelemetryTimeline() {
+      const container = document.getElementById('telemetry-timeline');
+      const recent = appState.auditLog.slice(0, 5);
+
+      if (recent.length === 0) {
+        container.innerHTML = `<p class="text-stone-400 dark:text-vault-darkMuted">No telemetry logged.</p>`;
+        return;
+      }
+
+      container.innerHTML = recent.map((item) => `
+        <div class="relative">
+          <div class="absolute -left-[17px] top-1.5 w-2 h-2 rounded-full bg-[#9A3412] dark:bg-amber-400 border border-white dark:border-vault-darkCard"></div>
+          <div class="text-[11px] font-mono text-stone-400 dark:text-vault-darkMuted">${item.timestamp.split(' ')[1]} IST</div>
+          <p class="font-medium text-stone-800 dark:text-vault-darkText mt-0.5">${item.event}</p>
+          <div class="text-[10px] font-mono text-stone-400 dark:text-vault-darkMuted truncate mt-0.5">${item.actor}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderAll() {
+      applyTheme();
+      updatePostureUI();
+      updateBadges();
+
+      const authView = document.getElementById('auth-view');
+      const vaultView = document.getElementById('vault-view');
+      const userPill = document.getElementById('header-user-pill');
+
+      if (!appState.currentUser) {
+        authView.classList.remove('hidden');
+        vaultView.classList.add('hidden');
+        userPill.classList.add('hidden');
+        userPill.classList.remove('flex');
+        return;
+      }
+
+      authView.classList.add('hidden');
+      vaultView.classList.remove('hidden');
+      userPill.classList.remove('hidden');
+      userPill.classList.add('flex');
+
+      const u = appState.currentUser;
+      const initials = u.name.split(' ').map((n) => n[0]).slice(0, 2).join('');
+
+      document.getElementById('header-avatar-initials').textContent = initials;
+      document.getElementById('header-user-rank').textContent = `${u.id} (${u.rank})`;
+
+      document.getElementById('sidebar-avatar-initials').textContent = initials;
+      document.getElementById('sidebar-user-name').textContent = u.name;
+      document.getElementById('sidebar-user-badge').textContent = u.id;
+      document.getElementById('sidebar-user-rank').textContent = u.rank;
+      document.getElementById('sidebar-clearance').textContent = u.clearance;
+      document.getElementById('sidebar-token').textContent = u.sessionToken;
+
+      document.getElementById('greeting-user-name').textContent = u.name;
+
+      renderSidebarRepos();
+      renderTelemetryTimeline();
+      switchTab(appState.activeTab || 'records');
+    }
+
+    function getStatusBadgeClasses(status) {
+      if (status === 'Sealed') {
+        return 'bg-[#FBF0EB] text-[#9A3412] border-[#F0D4C7] dark:bg-[#331B16] dark:text-amber-300 dark:border-[#6B3124]';
+      }
+      if (status === 'Pending Seal Approval') {
+        return 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800';
+      }
+      if (status === 'Pending Amendment') {
+        return 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800/80';
+      }
+      return 'bg-[#F4ECE6] text-[#4A2545] border-[#E6D9CE] dark:bg-vault-darkSubtle dark:text-rose-200 dark:border-vault-darkBorder';
+    }
+
+    async function approveRecordSeal(caseId) {
+      const c = appState.cases.find((item) => item.id === caseId);
+      if (!c) return;
+      const u = appState.currentUser;
+      if (!u || u.tier < 4) {
+        showToast('Access Denied: Only Tier 4+ officers (Inspector / Superintendent) can approve a new record to seal.', 'error');
+        return;
+      }
+      if (appState.posture === 'LOCKDOWN') {
+        showToast('Cannot seal record while Gateway posture is LOCKDOWN.', 'error');
+        return;
+      }
+      const timestamp = nowIST();
+      c.status = 'Sealed';
+      c.version = 'v1.0';
+      c.sealedBy = `${u.rank} ${u.name} (${u.id})`;
+      c.sha256 = await computeSHA256(`${c.id}|${c.fir}|${c.title}|${c.summary}|${c.evidence.join(';')}|SEALED|${c.sealedBy}|${timestamp}`);
+      c.custody.unshift({
+        time: timestamp,
+        actor: `${u.id} (${u.rank} · Tier ${u.tier})`,
+        action: `Approved & cryptographically sealed record (v1.0) under Tier 4+ authority.`
+      });
+      saveState();
+      renderSidebarRepos();
+      renderRecords();
+      if (inspectedCaseId === caseId && !document.getElementById('modal-inspect').classList.contains('hidden')) {
+        openInspectModal(caseId);
+      }
+      logAudit('RECORD', `${u.name} (${u.id} · ${u.rank})`, `Approved & sealed record ${c.id} (Tier 4+ authorization)`, c.sha256);
+      showToast(`Case ${c.id} approved and sealed by ${u.rank} ${u.name}.`, 'success');
+    }
+
+    function renderRecords() {
+      const grid = document.getElementById('records-grid');
+      const query = (document.getElementById('search-records').value || '').toLowerCase();
+      const statusFilter = document.getElementById('filter-status').value;
+      const classFilter = document.getElementById('filter-classification').value;
+
+      const filtered = appState.cases.filter((c) => {
+        const matchesQuery =
+          c.id.toLowerCase().includes(query) ||
+          c.fir.toLowerCase().includes(query) ||
+          c.title.toLowerCase().includes(query) ||
+          c.filedBy.toLowerCase().includes(query);
+        const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
+        const matchesClass = classFilter === 'ALL' || c.classification === classFilter;
+        return matchesQuery && matchesStatus && matchesClass;
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-8 text-center">
+            <p class="text-sm font-semibold text-stone-700 dark:text-vault-darkText">No case records match your query.</p>
+            <p class="text-xs text-stone-500 dark:text-vault-darkMuted mt-1">Try clearing search filters or create a new case.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map((c) => `
+        <article class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 sm:p-5 shadow-sm hover:border-[#9A3412] dark:hover:border-amber-500 transition space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold text-[#9A3412] dark:text-amber-300">${c.id}</span>
+              <span class="px-2 py-0.2 rounded-full text-[11px] font-mono bg-[#F4ECE6] dark:bg-vault-darkSubtle text-stone-600 dark:text-vault-darkMuted border border-[#E6D9CE] dark:border-vault-darkBorder">${c.version}</span>
+              <span class="text-stone-300 dark:text-vault-darkBorder">·</span>
+              <span class="text-xs font-mono text-stone-500 dark:text-vault-darkMuted">${c.fir}</span>
+            </div>
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold border ${getStatusBadgeClasses(c.status)}">
+              ${c.status}
+            </span>
+          </div>
+
+          <h4 class="text-base font-display font-bold text-stone-900 dark:text-white leading-snug">
+            ${c.title}
+          </h4>
+
+          <p class="text-xs text-stone-600 dark:text-vault-darkMuted line-clamp-2 leading-relaxed">
+            ${c.summary}
+          </p>
+
+          <div class="p-2.5 rounded-xl bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder flex items-center justify-between gap-2 text-xs font-mono">
+            <span class="text-stone-400 dark:text-vault-darkMuted shrink-0">SHA-256 Digest</span>
+            <span class="text-stone-700 dark:text-vault-darkText truncate">${c.sha256}</span>
+          </div>
+
+          <div class="flex items-center justify-between gap-2 pt-2 border-t border-[#F4ECE6] dark:border-vault-darkBorder text-xs">
+            <span class="text-stone-500 dark:text-vault-darkMuted truncate">
+              Custodian: <strong class="text-stone-700 dark:text-vault-darkText">${c.filedBy.split('(')[0].trim()}</strong>
+            </span>
+            <div class="flex items-center gap-2 shrink-0">
+              ${c.status === 'Pending Seal Approval' ? (
+                (appState.currentUser && appState.currentUser.tier >= 4)
+                  ? `<button onclick="approveRecordSeal('${c.id}')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#4A2545] hover:bg-[#381B34] text-white shadow-sm transition">Approve &amp; Seal</button>`
+                  : `<span class="px-2.5 py-1 rounded-lg text-[11px] font-mono bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800">Tier 4+ Seal Required</span>`
+              ) : ''}
+              <button onclick="openProposeAmendmentModal('${c.id}')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#F4ECE6] hover:bg-[#EAE0D7] dark:bg-vault-darkSubtle dark:hover:bg-[#382933] text-stone-800 dark:text-vault-darkText border border-[#E6D9CE] dark:border-vault-darkBorder transition">
+                Amend
+              </button>
+              <button onclick="openInspectModal('${c.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] dark:bg-[#B45309] dark:hover:bg-[#92400E] text-white shadow-sm transition">
+                Inspect Vault
+              </button>
+            </div>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function openNewRecordModal() {
+      if (appState.posture !== 'NORMAL') {
+        showToast(`Cannot file new primary record while Gateway posture is ${appState.posture}.`, 'error');
+        return;
+      }
+      const u = appState.currentUser;
+      const isTier4Plus = !!(u && u.tier >= 4);
+      const noticeEl = document.getElementById('new-record-tier-notice');
+      const submitBtn = document.getElementById('new-record-submit-btn');
+      if (noticeEl) {
+        noticeEl.textContent = isTier4Plus
+          ? `Authorized (${u.rank} · Tier ${u.tier}): Record will be cryptographically sealed immediately upon filing.`
+          : `Rank below Tier 4 (${u ? `${u.rank} · Tier ${u.tier}` : 'Unauthenticated'}): Record enters Pending Seal Approval — only Tier 4+ (Inspector / Superintendent) can approve it to seal.`;
+      }
+      if (submitBtn) {
+        submitBtn.textContent = isTier4Plus
+          ? 'Generate SHA-256 Seal & Commit'
+          : 'File Record (Awaiting Tier 4+ Seal)';
+      }
+      document.getElementById('new-fir').value = `FIR-BLR04-2026-0${Math.floor(240 + Math.random() * 700)}`;
+      document.getElementById('new-title').value = '';
+      document.getElementById('new-summary').value = '';
+      document.getElementById('new-evidence').value = '';
+      document.getElementById('modal-new-record').classList.remove('hidden');
+    }
+
+    async function handleCreateRecord(e) {
+      e.preventDefault();
+      if (appState.posture !== 'NORMAL') {
+        showToast(`Gateway posture is ${appState.posture}. Primary upload blocked.`, 'error');
+        return;
+      }
+
+      const fir = document.getElementById('new-fir').value.trim();
+      const classification = document.getElementById('new-classification').value;
+      const title = document.getElementById('new-title').value.trim();
+      const summary = document.getElementById('new-summary').value.trim();
+      const evidenceRaw = document.getElementById('new-evidence').value.trim();
+      const evidence = evidenceRaw.split(',').map((item, idx) => `EV-0${idx + 1}: ${item.trim()}`).filter(Boolean);
+
+      const newId = `CASE-2026-0${Math.floor(915 + Math.random() * 80)}`;
+      const u = appState.currentUser;
+      const timestamp = nowIST();
+      const isTier4Plus = !!(u && u.tier >= 4);
+      const initialStatus = isTier4Plus ? 'Sealed' : 'Pending Seal Approval';
+      const sha256 = await computeSHA256(`${newId}|${fir}|${title}|${summary}|${evidence.join(';')}|${initialStatus}|${timestamp}`);
+
+      const newCase = {
+        id: newId,
+        fir,
+        title,
+        classification,
+        status: initialStatus,
+        version: isTier4Plus ? 'v1.0' : 'v0.1-draft',
+        filedBy: `${u.rank} ${u.name} (${u.id})`,
+        filedAt: timestamp,
+        summary,
+        evidence,
+        sha256,
+        sealedBy: isTier4Plus ? `${u.rank} ${u.name} (${u.id})` : null,
+        custody: [
+          {
+            time: timestamp,
+            actor: `${u.id} (${u.rank} · Tier ${u.tier})`,
+            action: isTier4Plus
+              ? 'Primary record filed & cryptographically sealed by Tier 4+ authority (v1.0).'
+              : 'Primary record filed below Tier 4 — held in Pending Seal Approval until Tier 4+ approves to seal.'
+          }
+        ]
+      };
+
+      appState.cases.unshift(newCase);
+      saveState();
+      closeModal('modal-new-record');
+      updateBadges();
+      renderSidebarRepos();
+      renderRecords();
+      logAudit(
+        'RECORD',
+        `${u.name} (${u.id} · ${u.rank})`,
+        isTier4Plus
+          ? `Filed & sealed new primary case ${newId} (${fir})`
+          : `Filed case ${newId} (${fir}) below Tier 4 -> Pending Tier 4+ Approval to Seal`,
+        sha256
+      );
+      showToast(
+        isTier4Plus
+          ? `Case ${newId} filed and sealed with SHA-256 digest.`
+          : `Case ${newId} filed as Pending Seal Approval. Only Tier 4+ (Inspector / Superintendent) can approve it to seal.`,
+        isTier4Plus ? 'success' : 'warning'
+      );
+    }
+
+    function openInspectModal(caseId) {
+      const c = appState.cases.find((item) => item.id === caseId);
+      if (!c) return;
+      inspectedCaseId = caseId;
+
+      document.getElementById('inspect-case-id').textContent = `${c.id} · ${c.fir}`;
+      document.getElementById('inspect-version').textContent = c.version;
+      const statusBadge = document.getElementById('inspect-status-badge');
+      statusBadge.textContent = c.status;
+      statusBadge.className = `px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold border ${getStatusBadgeClasses(c.status)}`;
+      document.getElementById('inspect-title').textContent = c.title;
+
+      document.getElementById('inspect-body').innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-xs">
+          <div>
+            <span class="text-stone-400 dark:text-vault-darkMuted block font-mono">CLASSIFICATION</span>
+            <span class="font-mono font-bold text-stone-800 dark:text-white">${c.classification}</span>
+          </div>
+          <div>
+            <span class="text-stone-400 dark:text-vault-darkMuted block font-mono">PRIMARY CUSTODIAN</span>
+            <span class="font-semibold text-stone-800 dark:text-white">${c.filedBy}</span>
+          </div>
+          <div class="sm:col-span-2">
+            <span class="text-stone-400 dark:text-vault-darkMuted block font-mono">CRYPTOGRAPHIC SHA-256 SEAL</span>
+            <span id="inspect-sha-value" class="font-mono text-[#9A3412] dark:text-amber-300 break-all font-semibold">${c.sha256}</span>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-stone-500 dark:text-vault-darkMuted mb-1.5">Incident &amp; Evidentiary Summary</h4>
+          <p class="text-sm text-stone-700 dark:text-vault-darkText leading-relaxed bg-white dark:bg-vault-darkCanvas p-3.5 rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder">
+            ${c.summary}
+          </p>
+        </div>
+
+        ${(c.attachments && c.attachments.length > 0) ? `
+          <div>
+            <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-stone-500 dark:text-vault-darkMuted mb-1.5">Approved Amendment PDF Attachments (${c.attachments.length})</h4>
+            <div class="space-y-2">
+              ${c.attachments.map((att, idx) => `
+                <div class="p-3 rounded-xl bg-[#FBF0EB] dark:bg-[#331B16]/40 border border-[#F0D4C7] dark:border-[#6B3124] flex items-center justify-between gap-3 text-xs">
+                  <div class="min-w-0 font-mono">
+                    <div class="font-bold text-stone-900 dark:text-white truncate">${escapeHtml(att.name)}</div>
+                    <div class="text-[11px] text-stone-500 dark:text-vault-darkMuted">${escapeHtml(att.sizeLabel)} · Approved by ${escapeHtml(att.approvedBy || 'Supervisor')}</div>
+                  </div>
+                  <button type="button" onclick="openCasePdfViewer('${escapeHtml(c.id)}', ${idx})" class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white transition">
+                    View PDF
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div>
+          <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-stone-500 dark:text-vault-darkMuted mb-1.5">Sealed Evidence Manifest (${c.evidence.length} Items)</h4>
+          <ul class="space-y-1.5">
+            ${c.evidence.map((ev) => `
+              <li class="px-3.5 py-2.5 rounded-xl bg-[#FAF7F4] dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-xs font-mono text-stone-800 dark:text-vault-darkText flex items-center gap-2">
+                <svg class="w-4 h-4 text-[#9A3412] dark:text-amber-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>${ev}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-stone-500 dark:text-vault-darkMuted mb-1.5">Chain-of-Custody &amp; Version History</h4>
+          <div class="space-y-2 border-l-2 border-[#9A3412]/40 pl-3.5 ml-1">
+            ${c.custody.map((entry) => `
+              <div class="text-xs">
+                <div class="font-mono text-[11px] text-stone-400 dark:text-vault-darkMuted">${entry.time} · <strong class="text-stone-700 dark:text-vault-darkText">${entry.actor}</strong></div>
+                <div class="text-stone-700 dark:text-vault-darkText mt-0.5">${entry.action}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('modal-inspect').classList.remove('hidden');
+    }
+
+    function verifyCurrentCaseHash() {
+      const c = appState.cases.find((item) => item.id === inspectedCaseId);
+      if (!c) return;
+      logAudit('RECORD', `${appState.currentUser.name} (${appState.currentUser.id})`, `Verified SHA-256 integrity seal for ${c.id} (${c.version}) — MATCH CONFIRMED`, c.sha256);
+      showToast(`SHA-256 Integrity Verified for ${c.id}: Seal intact, zero tampering detected.`, 'success');
+    }
+
+    function openAmendmentForInspectedCase() {
+      const id = inspectedCaseId;
+      closeModal('modal-inspect');
+      openProposeAmendmentModal(id);
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function openProposeAmendmentModal(preselectCaseId = null) {
+      if (appState.posture === 'LOCKDOWN') {
+        showToast('Gateway is in LOCKDOWN. Amendment proposals are suspended.', 'error');
+        return;
+      }
+
+      const select = document.getElementById('amend-case-select');
+      select.innerHTML = appState.cases.map((c) => `
+        <option value="${c.id}" ${c.id === preselectCaseId ? 'selected' : ''}>${c.id} (${c.version}) — ${c.title}</option>
+      `).join('');
+
+      prefillAmendmentFromCase();
+      document.getElementById('amend-reason').value = '';
+      clearAmendmentPdfSelection();
+      document.getElementById('modal-propose-amendment').classList.remove('hidden');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+      return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function clearAmendmentPdfSelection() {
+      pendingAmendmentPdf = null;
+      const input = document.getElementById('amend-pdf-file');
+      const preview = document.getElementById('amend-pdf-preview');
+      if (input) input.value = '';
+      if (preview) preview.classList.add('hidden');
+    }
+
+    function handleAmendmentPdfSelection(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) {
+        clearAmendmentPdfSelection();
+        return;
+      }
+
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) {
+        showToast('Please select a valid PDF (.pdf) file.', 'error');
+        clearAmendmentPdfSelection();
+        return;
+      }
+
+      if (file.size > 4 * 1024 * 1024) {
+        showToast('PDF exceeds 4 MB demo browser storage limit. Choose a smaller PDF.', 'warning');
+        clearAmendmentPdfSelection();
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result;
+        const base64Part = typeof dataUrl === 'string' && dataUrl.includes(',') ? dataUrl.split(',')[1] : file.name;
+        const digest = await computeSHA256(`${file.name}|${file.size}|${base64Part.slice(0, 4096)}`);
+        pendingAmendmentPdf = {
+          name: file.name,
+          sizeBytes: file.size,
+          sizeLabel: formatBytes(file.size),
+          sha256: digest,
+          uploadedAt: nowIST(),
+          dataUrl
+        };
+
+        document.getElementById('amend-pdf-name').textContent = pendingAmendmentPdf.name;
+        document.getElementById('amend-pdf-meta').textContent = `${pendingAmendmentPdf.sizeLabel} · SHA-256: ${pendingAmendmentPdf.sha256.slice(0, 16)}...`;
+        document.getElementById('amend-pdf-preview').classList.remove('hidden');
+        showToast(`Attached PDF "${pendingAmendmentPdf.name}" to amendment proposal.`, 'success');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function prefillAmendmentFromCase() {
+      const caseId = document.getElementById('amend-case-select').value;
+      const c = appState.cases.find((item) => item.id === caseId);
+      if (c) {
+        document.getElementById('amend-notes').value = c.summary;
+      }
+    }
+
+    function handleProposeAmendment(e) {
+      e.preventDefault();
+      const caseId = document.getElementById('amend-case-select').value;
+      const c = appState.cases.find((item) => item.id === caseId);
+      if (!c) return;
+
+      const newStatus = document.getElementById('amend-new-status').value;
+      const reason = document.getElementById('amend-reason').value.trim();
+      const updatedSummary = document.getElementById('amend-notes').value.trim();
+      const extraEvidence = '';
+      const u = appState.currentUser;
+
+      const amdId = 'LOTO-AMD-' + Math.floor(405 + Math.random() * 590);
+      const pdfSnapshot = pendingAmendmentPdf ? { ...pendingAmendmentPdf } : null;
+      const amendment = {
+        id: amdId,
+        caseId: c.id,
+        caseTitle: c.title,
+        proposedBy: u.name,
+        proposedById: u.id,
+        proposedByRank: u.rank,
+        proposedAt: nowIST(),
+        reason,
+        newStatus,
+        previousStatus: c.status,
+        previousSummary: c.summary,
+        updatedSummary,
+        extraEvidence,
+        pdfAttachment: pdfSnapshot,
+        state: 'AWAITING_APPROVAL',
+        approvedBy: null,
+        cooldownEndsAt: null
+      };
+
+      c.status = 'Pending Amendment';
+      appState.amendments.unshift(amendment);
+      saveState();
+
+      closeModal('modal-propose-amendment');
+      updateBadges();
+      logAudit('LOTO', `${u.name} (${u.id} · ${u.rank})`, `Proposed LOTO Amendment ${amdId} on ${c.id} -> Awaiting Inspector+ Approval`);
+      showToast(`Amendment ${amdId} submitted to LOTO Queue. Awaiting Inspector+ approval.`, 'info');
+      switchTab('loto');
+    }
+
+    function approveAmendmentStartCooldown(amdId) {
+      const u = appState.currentUser;
+      if (!u || u.tier < 4) {
+        showToast('Access Denied: Only Inspector (Tier 4) or Superintendent (Tier 5) may approve LOTO amendments.', 'error');
+        return;
+      }
+      if (appState.posture === 'LOCKDOWN') {
+        showToast('Cannot approve amendment while Gateway is in LOCKDOWN.', 'error');
+        return;
+      }
+
+      const amd = appState.amendments.find((a) => a.id === amdId);
+      if (!amd || amd.state !== 'AWAITING_APPROVAL') return;
+
+      amd.state = 'COOLING';
+      amd.approvedBy = `${u.rank} ${u.name} (${u.id})`;
+      amd.cooldownEndsAt = Date.now() + 15000;
+      saveState();
+
+      logAudit('LOTO', `${u.name} (${u.id} · ${u.rank})`, `Approved ${amd.id} for ${amd.caseId} — Started 15s mandatory LOTO cooling timer`);
+      showToast(`Supervisory approval signed by ${u.rank} ${u.name}. 15s LOTO Cooling Timer started.`, 'warning');
+      renderLotoQueue();
+    }
+
+    function vetoAmendment(amdId) {
+      const amd = appState.amendments.find((a) => a.id === amdId);
+      if (!amd) return;
+      const u = appState.currentUser;
+      amd.state = 'VETOED';
+      amd.cooldownEndsAt = null;
+
+      const targetCase = appState.cases.find((c) => c.id === amd.caseId);
+      if (targetCase) {
+        const otherPending = appState.amendments.some((a) => a.caseId === amd.caseId && a.id !== amdId && (a.state === 'AWAITING_APPROVAL' || a.state === 'COOLING' || a.state === 'READY_TO_COMMIT'));
+        if (!otherPending) targetCase.status = 'Sealed';
+      }
+
+      saveState();
+      updateBadges();
+      logAudit('LOTO', `${u.name} (${u.id} · ${u.rank})`, `Vetoed & cancelled LOTO Tag-Out ${amd.id} on ${amd.caseId}`);
+      showToast(`Amendment ${amd.id} vetoed and tag-out released.`, 'info');
+      renderLotoQueue();
+    }
+
+    async function executeSealedCommit(amdId) {
+      const amd = appState.amendments.find((a) => a.id === amdId);
+      if (!amd) return;
+
+      const remaining = amd.cooldownEndsAt ? Math.ceil((amd.cooldownEndsAt - Date.now()) / 1000) : 0;
+      if (remaining > 0) {
+        showToast(`LOTO Cooling Interlock active: Wait ${remaining}s before executing commit.`, 'warning');
+        return;
+      }
+
+      if (appState.posture === 'LOCKDOWN') {
+        showToast('Gateway LOCKDOWN active: Commit blocked.', 'error');
+        return;
+      }
+
+      const targetCase = appState.cases.find((c) => c.id === amd.caseId);
+      const u = appState.currentUser;
+      const timestamp = nowIST();
+
+      if (targetCase) {
+        const parts = targetCase.version.replace('v', '').split('.');
+        const major = parseInt(parts[0] || '1', 10);
+        const minor = parseInt(parts[1] || '0', 10) + 1;
+        targetCase.version = `v${major}.${minor}`;
+        targetCase.status = amd.newStatus || 'Sealed';
+        targetCase.summary = amd.updatedSummary;
+        if (amd.extraEvidence) {
+          targetCase.evidence.push(amd.extraEvidence);
+        }
+        if (amd.pdfAttachment) {
+          const pdfLabel = `PDF-DOC: ${amd.pdfAttachment.name} (${amd.pdfAttachment.sizeLabel} · SHA-256 ${amd.pdfAttachment.sha256.slice(0, 12)}...)`;
+          if (!targetCase.evidence.includes(pdfLabel)) {
+            targetCase.evidence.push(pdfLabel);
+          }
+          targetCase.attachments = targetCase.attachments || [];
+          targetCase.attachments.unshift({
+            ...amd.pdfAttachment,
+            amendmentId: amd.id,
+            approvedBy: amd.approvedBy,
+            committedAt: timestamp
+          });
+        }
+        targetCase.sha256 = await computeSHA256(`${targetCase.id}|${targetCase.version}|${targetCase.summary}|${targetCase.evidence.join(';')}|${timestamp}`);
+        targetCase.custody.unshift({
+          time: timestamp,
+          actor: `${amd.approvedBy} + ${amd.proposedById}`,
+          action: `LOTO Dual-Signature Commit (${amd.id} -> ${targetCase.version}): ${amd.reason}${amd.pdfAttachment ? ` [PDF Attached: ${amd.pdfAttachment.name}]` : ''}`
+        });
+      }
+
+      amd.state = 'COMMITTED';
+      amd.committedAt = timestamp;
+      saveState();
+      updateBadges();
+
+      logAudit('LOTO', `${u.name} (${u.id} · ${u.rank})`, `Executed Sealed LOTO Commit ${amd.id} -> ${amd.caseId} upgraded to ${targetCase ? targetCase.version : 'new version'}`, targetCase ? targetCase.sha256 : '');
+      showToast(`Sealed Commit Executed! ${amd.caseId} upgraded to ${targetCase.version} with new SHA-256 seal.`, 'success');
+      renderLotoQueue();
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderAmendmentDiffAndPdfSection(amd) {
+      const linkedCase = appState.cases.find((c) => c.id === amd.caseId);
+      const beforeSummary = amd.previousSummary || (linkedCase ? linkedCase.summary : 'Original sealed record summary');
+      const afterSummary = amd.updatedSummary || beforeSummary;
+      const summaryChanged = beforeSummary.trim() !== afterSummary.trim();
+      const beforeStatus = amd.previousStatus || (linkedCase ? linkedCase.status : 'Sealed');
+      const afterStatus = amd.newStatus || 'Sealed';
+
+      const pdfBlock = amd.pdfAttachment
+        ? `
+          <div class="p-3 rounded-xl bg-[#FBF0EB] dark:bg-[#331B16]/40 border border-[#F0D4C7] dark:border-[#6B3124] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#9A3412] text-white">PDF ATTACHED</span>
+                <span class="text-xs font-mono font-bold text-stone-900 dark:text-white truncate">${escapeHtml(amd.pdfAttachment.name)}</span>
+              </div>
+              <div class="text-[11px] font-mono text-stone-600 dark:text-vault-darkMuted mt-1">
+                ${escapeHtml(amd.pdfAttachment.sizeLabel)} · Uploaded ${escapeHtml(amd.pdfAttachment.uploadedAt || amd.proposedAt)} · SHA-256: <span class="text-stone-800 dark:text-white">${escapeHtml((amd.pdfAttachment.sha256 || '').slice(0, 18))}...</span>
+              </div>
+            </div>
+            <button type="button" onclick="openAmendmentPdfViewer('${escapeHtml(amd.id)}')" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-mono font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white shadow-sm transition">
+              View PDF File
+            </button>
+          </div>
+        `
+        : `
+          <div class="p-2.5 rounded-xl bg-white dark:bg-vault-darkCard border border-[#E6D9CE] dark:border-vault-darkBorder text-[11px] font-mono text-stone-500 dark:text-vault-darkMuted">
+            No supplementary PDF file attached to this amendment.
+          </div>
+        `;
+
+      return `
+        <div class="p-3.5 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkCanvas border border-[#E6D9CE] dark:border-vault-darkBorder space-y-2.5 text-xs">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-mono font-bold uppercase text-[10px] tracking-wider text-stone-500 dark:text-vault-darkMuted">
+              Proposed Changes Made (Supervisory Diff)
+            </span>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800">
+              Status Target: ${escapeHtml(beforeStatus)} &rarr; ${escapeHtml(afterStatus)}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div class="p-2.5 rounded-xl bg-red-50/60 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/60">
+              <div class="text-[10px] font-mono font-bold text-red-700 dark:text-red-300 mb-1">- PRIOR RECORD NOTES</div>
+              <p class="text-stone-700 dark:text-vault-darkText leading-relaxed">${escapeHtml(beforeSummary)}</p>
+            </div>
+            <div class="p-2.5 rounded-xl ${summaryChanged ? 'bg-amber-50/80 dark:bg-amber-950/25 border border-amber-300 dark:border-amber-800/70' : 'bg-white dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder'}">
+              <div class="text-[10px] font-mono font-bold ${summaryChanged ? 'text-[#9A3412] dark:text-amber-300' : 'text-stone-500 dark:text-vault-darkMuted'} mb-1">
+                ${summaryChanged ? '+ AMENDED RECORD NOTES (CHANGED)' : '= RECORD NOTES (UNCHANGED)'}
+              </div>
+              <p class="text-stone-800 dark:text-vault-darkText leading-relaxed">${escapeHtml(afterSummary)}</p>
+            </div>
+          </div>
+
+          ${pdfBlock}
+        </div>
+      `;
+    }
+
+    function openAmendmentPdfViewer(amdId) {
+      const amd = appState.amendments.find((a) => a.id === amdId);
+      if (!amd || !amd.pdfAttachment) {
+        showToast('No PDF file found on this amendment.', 'warning');
+        return;
+      }
+      renderPdfModal(amd.pdfAttachment, `${amd.id} · ${amd.caseId}`);
+    }
+
+    function openCasePdfViewer(caseId, index = 0) {
+      const c = appState.cases.find((item) => item.id === caseId);
+      const doc = c && c.attachments && c.attachments[index];
+      if (!doc) {
+        showToast('Attached PDF not found.', 'warning');
+        return;
+      }
+      renderPdfModal(doc, `${c.id} · ${doc.amendmentId || 'Case Dossier'}`);
+    }
+
+    function renderPdfModal(pdfDoc, contextLabel) {
+      document.getElementById('pdf-viewer-title').textContent = pdfDoc.name;
+      document.getElementById('pdf-viewer-meta').textContent = `${contextLabel} · ${pdfDoc.sizeLabel}`;
+
+      const dlBtn = document.getElementById('pdf-viewer-download');
+      const body = document.getElementById('pdf-viewer-body');
+
+      if (pdfDoc.dataUrl) {
+        dlBtn.href = pdfDoc.dataUrl;
+        dlBtn.setAttribute('download', pdfDoc.name);
+        dlBtn.classList.remove('pointer-events-none', 'opacity-50');
+        body.innerHTML = `<iframe src="${pdfDoc.dataUrl}" title="${escapeHtml(pdfDoc.name)}" class="w-full h-full border-0 bg-white"></iframe>`;
+      } else {
+        dlBtn.removeAttribute('href');
+        dlBtn.classList.add('pointer-events-none', 'opacity-50');
+        body.innerHTML = `
+          <div class="p-6 sm:p-8 overflow-y-auto space-y-4 text-sm">
+            <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-mono">
+              PRE-SEEDED DEMO ADDENDUM METADATA — Upload any local .pdf file when proposing an amendment to embed and preview the live PDF document directly inside this viewer.
+            </div>
+            <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-5 space-y-2 text-xs font-mono">
+              <div><span class="text-stone-400">FILE NAME:</span> <strong class="text-stone-900 dark:text-white">${escapeHtml(pdfDoc.name)}</strong></div>
+              <div><span class="text-stone-400">FILE SIZE:</span> <strong class="text-stone-900 dark:text-white">${escapeHtml(pdfDoc.sizeLabel)}</strong></div>
+              <div><span class="text-stone-400">SHA-256 DIGEST:</span> <strong class="text-[#9A3412] dark:text-amber-300 break-all">${escapeHtml(pdfDoc.sha256)}</strong></div>
+              <p class="pt-2 text-stone-600 dark:text-vault-darkMuted font-sans">${escapeHtml(pdfDoc.summaryNote || '')}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      document.getElementById('modal-pdf-viewer').classList.remove('hidden');
+    }
+
+    function renderLotoQueue() {
+      const container = document.getElementById('loto-queue-list');
+      const u = appState.currentUser;
+      const canApprove = u && u.tier >= 4;
+
+      if (appState.amendments.length === 0) {
+        container.innerHTML = `<div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-8 text-center"><p class="text-sm font-semibold text-stone-700 dark:text-vault-darkText">No LOTO amendments in queue.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = appState.amendments.map((amd) => {
+        let remainingSec = 0;
+        if (amd.state === 'COOLING' && amd.cooldownEndsAt) {
+          remainingSec = Math.max(0, Math.ceil((amd.cooldownEndsAt - Date.now()) / 1000));
+          if (remainingSec === 0) {
+            amd.state = 'READY_TO_COMMIT';
+            saveState();
+          }
+        }
+
+        const progressPct = amd.state === 'COOLING'
+          ? Math.min(100, Math.max(0, ((15 - remainingSec) / 15) * 100))
+          : amd.state === 'READY_TO_COMMIT' || amd.state === 'COMMITTED'
+          ? 100
+          : 0;
+
+        let stateBadge = '';
+        if (amd.state === 'AWAITING_APPROVAL') {
+          stateBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">AWAITING INSPECTOR+ APPROVAL</span>`;
+        } else if (amd.state === 'COOLING') {
+          stateBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800 animate-pulse">LOTO COOLING (${remainingSec}s)</span>`;
+        } else if (amd.state === 'READY_TO_COMMIT') {
+          stateBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#FBF0EB] text-[#9A3412] border border-[#F0D4C7] dark:bg-[#331B16] dark:text-amber-300 dark:border-[#6B3124]">READY TO COMMIT</span>`;
+        } else if (amd.state === 'COMMITTED') {
+          stateBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#F4ECE6] text-stone-700 border border-[#E6D9CE] dark:bg-vault-darkSubtle dark:text-vault-darkMuted dark:border-vault-darkBorder">SEALED COMMIT EXECUTED</span>`;
+        } else {
+          stateBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800">VETOED / CANCELLED</span>`;
+        }
+
+        return `
+          <div class="bg-white dark:bg-vault-darkCard rounded-2xl border border-[#E6D9CE] dark:border-vault-darkBorder p-4 sm:p-5 shadow-sm space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono font-bold text-[#9A3412] dark:text-amber-300">${amd.id}</span>
+                  <span class="text-stone-300 dark:text-vault-darkBorder">·</span>
+                  <span class="text-xs font-mono text-stone-700 dark:text-vault-darkText">${amd.caseId}</span>
+                </div>
+                <h4 class="text-base font-display font-bold text-stone-900 dark:text-white mt-0.5">${amd.caseTitle}</h4>
+              </div>
+              <div class="shrink-0">${stateBadge}</div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 p-3.5 rounded-2xl bg-[#FAF7F4] dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-xs">
+              <div>
+                <span class="text-stone-400 dark:text-vault-darkMuted font-mono block text-[10px]">PROPOSED BY</span>
+                <span class="font-semibold text-stone-800 dark:text-white">${amd.proposedByRank} ${amd.proposedBy} (${amd.proposedById})</span>
+              </div>
+              <div>
+                <span class="text-stone-400 dark:text-vault-darkMuted font-mono block text-[10px]">SUPERVISORY APPROVER</span>
+                <span class="font-semibold text-stone-800 dark:text-white">${amd.approvedBy || 'Pending Tier-4+ Signature'}</span>
+              </div>
+              <div class="md:col-span-2 pt-1.5 border-t border-[#E6D9CE] dark:border-vault-darkBorder">
+                <span class="text-stone-400 dark:text-vault-darkMuted font-mono block text-[10px]">JUSTIFICATION</span>
+                <p class="text-stone-800 dark:text-vault-darkText font-medium mt-0.5">${amd.reason}</p>
+                ${amd.extraEvidence ? `<p class="mt-1 font-mono text-[11px] text-[#9A3412] dark:text-amber-300">+ Append Evidence: ${amd.extraEvidence}</p>` : ''}
+              </div>
+            </div>
+
+            ${renderAmendmentDiffAndPdfSection(amd)}
+
+            ${(amd.state === 'COOLING' || amd.state === 'READY_TO_COMMIT') ? `
+              <div class="p-3 rounded-xl border ${amd.state === 'COOLING' ? 'bg-amber-50/60 border-amber-200 dark:bg-amber-950/25 dark:border-amber-800/70' : 'bg-[#FBF0EB]/80 border-[#F0D4C7] dark:bg-[#331B16]/40 dark:border-[#6B3124]'} space-y-1.5">
+                <div class="flex items-center justify-between text-xs font-mono font-semibold">
+                  <span class="${amd.state === 'COOLING' ? 'text-amber-800 dark:text-amber-300' : 'text-[#9A3412] dark:text-amber-300'}">
+                    ${amd.state === 'COOLING' ? 'MANDATORY 15s LOTO COOLING TIMER IN PROGRESS...' : '15s LOTO COOLING INTERLOCK SATISFIED'}
+                  </span>
+                  <span class="font-bold ${amd.state === 'COOLING' ? 'text-amber-700 dark:text-amber-400' : 'text-[#9A3412] dark:text-amber-400'}">
+                    ${amd.state === 'COOLING' ? `${remainingSec}s remaining` : '0s · UNLOCKED'}
+                  </span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-[#E6D9CE] dark:bg-vault-darkCanvas overflow-hidden">
+                  <div class="h-full transition-all duration-300 ${amd.state === 'COOLING' ? 'bg-amber-500' : 'bg-[#9A3412]'}" style="width: ${progressPct}%"></div>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+              ${amd.state === 'AWAITING_APPROVAL' ? (
+                canApprove ? `
+                  <span class="text-xs text-[#9A3412] dark:text-amber-300 font-medium">Rank verified (${u.rank}). Authorized to start cooldown.</span>
+                  <div class="flex items-center gap-2">
+                    <button onclick="vetoAmendment('${amd.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 border border-red-200 dark:border-red-800 transition">
+                      Reject / Veto
+                    </button>
+                    <button onclick="approveAmendmentStartCooldown('${amd.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white shadow-sm transition">
+                      Approve &amp; Start 15s Cooldown
+                    </button>
+                  </div>
+                ` : `
+                  <div class="flex flex-wrap items-center justify-between gap-2 w-full p-3 rounded-xl bg-[#FAF7F4] dark:bg-vault-darkSubtle border border-[#E6D9CE] dark:border-vault-darkBorder text-xs">
+                    <span class="text-stone-700 dark:text-vault-darkText">Approval requires Inspector or Superintendent rank (Current: ${u.rank}).</span>
+                    <button onclick="quickSwitchToInspector()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-[#9A3412] hover:bg-[#7C2D12] text-white transition">
+                      Switch to Inspector (OFC-201)
+                    </button>
+                  </div>
+                `
+              ) : amd.state === 'COOLING' ? `
+                <span class="text-xs text-stone-500 dark:text-vault-darkMuted">Supervisory veto window open until timer reaches 0s.</span>
+                <div class="flex items-center gap-2">
+                  <button onclick="vetoAmendment('${amd.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 border border-red-200 dark:border-red-800 transition">
+                    Cancel / Veto
+                  </button>
+                  <button disabled class="px-3.5 py-1.5 rounded-xl text-xs font-mono font-semibold bg-[#E6D9CE] dark:bg-vault-darkSubtle text-stone-400 dark:text-vault-darkMuted cursor-not-allowed">
+                    Locked (${remainingSec}s)...
+                  </button>
+                </div>
+              ` : amd.state === 'READY_TO_COMMIT' ? `
+                <span class="text-xs font-semibold text-[#9A3412] dark:text-amber-300">Cooldown Verified. Ready to commit.</span>
+                <div class="flex items-center gap-2">
+                  <button onclick="vetoAmendment('${amd.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 border border-red-200 dark:border-red-800 transition">
+                    Cancel / Veto
+                  </button>
+                  <button onclick="executeSealedCommit('${amd.id}')" class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-[#4A2545] hover:bg-[#381B34] text-white shadow-sm transition">
+                    Execute Sealed Commit
+                  </button>
+                </div>
+              ` : `
+                <span class="text-xs font-mono text-stone-400 dark:text-vault-darkMuted">Record finalized in audit ledger.</span>
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function startCooldownTicker() {
+      if (cooldownInterval) clearInterval(cooldownInterval);
+      cooldownInterval = setInterval(() => {
+        const hasActiveCooldown = appState.amendments.some((a) => a.state === 'COOLING');
+        if (hasActiveCooldown && appState.currentUser && appState.activeTab === 'loto') {
+          renderLotoQueue();
+        } else if (hasActiveCooldown) {
+          let transitioned = false;
+          appState.amendments.forEach((a) => {
+            if (a.state === 'COOLING' && a.cooldownEndsAt && Date.now() >= a.cooldownEndsAt) {
+              a.state = 'READY_TO_COMMIT';
+              transitioned = true;
+            }
+          });
+          if (transitioned) {
+            saveState();
+            showToast('15s LOTO Cooldown complete! Amendment ready for Execute Sealed Commit.', 'success');
+          }
+        }
+      }, 500);
+    }
+
+    function renderAuditLedger() {
+      const tbody = document.getElementById('audit-table-body');
+      const query = (document.getElementById('search-audit').value || '').toLowerCase();
+      const catFilter = document.getElementById('filter-audit-type').value;
+
+      const filtered = appState.auditLog.filter((item) => {
+        const matchesCat = catFilter === 'ALL' || item.category === catFilter;
+        const matchesQuery =
+          item.actor.toLowerCase().includes(query) ||
+          item.event.toLowerCase().includes(query) ||
+          item.hash.toLowerCase().includes(query) ||
+          item.id.toLowerCase().includes(query);
+        return matchesCat && matchesQuery;
+      });
+
+      const catColors = {
+        AUTH: 'bg-[#F4ECE6] text-[#4A2545] border-[#E6D9CE] dark:bg-vault-darkSubtle dark:text-rose-200 dark:border-vault-darkBorder',
+        RECORD: 'bg-[#FBF0EB] text-[#9A3412] border-[#F0D4C7] dark:bg-[#331B16] dark:text-amber-300 dark:border-[#6B3124]',
+        LOTO: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+        SECURITY: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800'
+      };
+
+      tbody.innerHTML = filtered.map((row) => `
+        <tr class="hover:bg-[#FAF7F4] dark:hover:bg-vault-darkSubtle transition">
+          <td class="py-2.5 px-3.5 font-mono text-[11px] text-stone-500 dark:text-vault-darkMuted whitespace-nowrap">${row.timestamp}</td>
+          <td class="py-2.5 px-3.5 whitespace-nowrap">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${catColors[row.category] || catColors.AUTH}">
+              ${row.category}
+            </span>
+          </td>
+          <td class="py-2.5 px-3.5 font-medium text-stone-800 dark:text-white whitespace-nowrap">${row.actor}</td>
+          <td class="py-2.5 px-3.5 text-stone-700 dark:text-vault-darkText">${row.event}</td>
+          <td class="py-2.5 px-3.5 font-mono text-[11px] text-stone-400 dark:text-vault-darkMuted whitespace-nowrap">${row.hash.slice(0, 16)}...</td>
+        </tr>
+      `).join('');
+    }
+
+    function downloadFile(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function exportAuditJSON() {
+      const payload = JSON.stringify({
+        station: STATION_SCOPE,
+        exportedAt: nowIST(),
+        posture: appState.posture,
+        entries: appState.auditLog
+      }, null, 2);
+      downloadFile(`LOTO-Audit-Ledger-${STATION_SCOPE}.json`, payload, 'application/json');
+      showToast('Exported Immutable Audit Ledger as JSON.', 'success');
+    }
+
+    function exportAuditCSV() {
+      const headers = ['ID', 'Timestamp', 'Category', 'Actor', 'Event', 'ChainHash'];
+      const rows = appState.auditLog.map((r) =>
+        [r.id, r.timestamp, r.category, `"${r.actor.replace(/"/g, '""')}"`, `"${r.event.replace(/"/g, '""')}"`, r.hash].join(',')
+      );
+      downloadFile(`LOTO-Audit-Ledger-${STATION_SCOPE}.csv`, [headers.join(','), ...rows].join('\n'), 'text/csv');
+      showToast('Exported Immutable Audit Ledger as CSV.', 'success');
+    }
+
+    function handleGlobalSearch(query) {
+      if (!appState.currentUser) return;
+      document.getElementById('search-records').value = query;
+      document.getElementById('search-audit').value = query;
+      if (appState.activeTab === 'records') renderRecords();
+      if (appState.activeTab === 'audit') renderAuditLedger();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const globalSearch = document.getElementById('global-search-input');
+        if (globalSearch) globalSearch.focus();
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      renderAll();
+      startCooldownTicker();
+    });
+  </script>
+</body>
+</html>
