@@ -72,6 +72,14 @@ def get_gateway_token() -> str:
     return ""
 
 
+def check_gateway_token(token: Optional[str]) -> bool:
+    """Verify that token matches the shared gateway token using constant-time compare."""
+    expected = get_gateway_token()
+    if not expected or not token:
+        return False
+    return hmac.compare_digest(token.strip(), expected.strip())
+
+
 def verify_gateway_request(request: Request) -> None:
     """Constant-time token validation and loopback enforcement."""
     client_host = request.client.host if request.client else ""
