@@ -12,7 +12,7 @@ impl Config {
     pub fn from_env() -> Config {
         Config {
             bind: env_or("LOT_BIND", "127.0.0.1:8080"),
-            upstream: env_or("LOT_UPSTREAM", "http://127.0.0.1:9000"),
+            upstream: env_or("LOT_UPSTREAM", "http://127.0.0.1:8000"),
             data_dir: PathBuf::from(env_or("LOT_DATA_DIR", "./lot-data")),
         }
     }
@@ -25,6 +25,11 @@ impl Config {
     /// The JSON file that holds officers and devices.
     pub fn store_path(&self) -> PathBuf {
         self.data_dir.join("store.json")
+    }
+
+    /// The token file shared with the upstream app.
+    pub fn token_path(&self) -> PathBuf {
+        self.data_dir.join("gateway.token")
     }
 }
 

@@ -9,6 +9,11 @@
       "officer_id": "Bob",
       "revoked": true,
       "created_at": 1795096735
+    },
+    {
+      "officer_id": "John",
+      "revoked": false,
+      "created_at": 1795147637
     }
   ],
   "devices": [
@@ -29,6 +34,15 @@
       "config_hash_hex": "a54805240cf01db5baa2b66c692b84b34c91e55a2c96626905784eafab8f047d",
       "revoked": true,
       "created_at": 1795096735
+    },
+    {
+      "device_id": "dev-5ea32a37f57841fd",
+      "officer_id": "John",
+      "public_key_hex": "ed07fab6c8a3158c72724b5d1388ee69de4477a53e4a75d7b5a42c2eccaf1a01",
+      "shared_secret_hex": "813c952897fb6b98076075bb734831ca10299bee5bf595e0c7c882b34ff68fc6",
+      "config_hash_hex": "a54805240cf01db5baa2b66c692b84b34c91e55a2c96626905784eafab8f047d",
+      "revoked": false,
+      "created_at": 1795147637
     }
   ]
 }

@@ -1,52 +1,75 @@
-# LockOut-TagOut (LOTO) Zero-Trust Gateway
+# LockOut-TagOut (LOTO) Zero-Trust Gateway & Case Vault
 
-A zero-trust security gateway and lockout system for legal case vaults. The gateway governs officer authentication, device attestation, session seeds, per-request shifting codes (ratchet), and automated/manual lockdown mechanisms.
+> **Specification Authority:** [docs/SPEC.md](file:///docs/SPEC.md) is the single source of truth for all requirements, architecture, and protocols.
 
----
-
-## Architecture Overview
-
-The system is split into two layers:
-1. **`user_gateway` (`lot-gateway`)**: A high-performance Rust gateway that manages:
-   - Officer & device registry and authentication handshakes (Ed25519 signatures).
-   - Per-request shifting one-time verification codes derived via HKDF-SHA256 hash chains.
-   - Genuine replay attack detection using a ring buffer of accepted request hashes.
-   - Multi-stage lockout state machine (`NORMAL` -> `RESTRICTED` -> `LOCKED`).
-   - Atomic disk persistence (`store.json` and `lock-state.json`).
-   - Real-time event broadcasting over WebSocket (`/ws`).
-   - Upstream sealing notification (`/internal/seal`).
-2. **Upstream Service**: The internal backend service (FastAPI / Python) handling case files, OCR, AI pipelines, and persistent audit logging, accessible only through the gateway.
+A zero-trust security gateway and evidence vault for sensitive records. The system governs officer authentication, device attestation, session seeds, per-request shifting codes (ratchet), biometric presence verification, and automated/manual lockdown mechanisms.
 
 ---
 
-## State Machine: Lockout States & Transitions
+## Architecture Overview (Three Levels)
 
-The gateway enforces fail-closed state isolation:
+The system is organized into three levels centered around `main.py` (`127.0.0.1:8000`):
 
-| State | Allowed Operations |
-|---|---|
-| **`NORMAL`** | All traffic permitted; read/write `/api/*` forwards enabled. |
-| **`RESTRICTED`** | Triggered on 1st anomaly (3 bad codes in a session or 3 failed handshakes on a device). `/api/*` accepts read-only methods (`GET`, `HEAD`, `OPTIONS`); writes return `403 Forbidden`. Logins still permitted. |
-| **`LOCKED`** | Triggered immediately on `Replay`, `Manual` lock, or 2nd anomaly. Returns `503 Service Unavailable` on all routes except `GET /status` and `/restore`. Drops all active sessions and nonces, persists `LOCKED` state, and invokes upstream seal. |
+1. **Level 1 (Deep Backend - Rust): `user_gateway` (`lot-gateway`, `lotoctl`)**
+   - Listens on `127.0.0.1:8080` (the only origin accessed by the browser).
+   - Handles login/logout, sessions, shifting codes (HKDF ratchet), device lockout, tagout, and token validation.
+   - Forwards authenticated `/api/*` traffic to the app on `127.0.0.1:8000` and serves public static UI assets (`/` and `/ui/*`).
+   - Mutual loopback trust via `X-Gateway-Token` (`LOT_DATA_DIR/gateway.token`).
 
-*Note: Once `LOCKED`, the system can only return to `NORMAL` through an authorized restore procedure.*
+2. **Level 2 (Mid Backend - Python Modules)**
+   - `rustPolish.py`: Bridge between app and gateway (`/internal/audit`, `/internal/seal`, `/internal/unseal`, `/internal/face-check`). Read-only client helpers (no unlock/restore/enrol).
+   - `candyWrapper.py`: OCR, face detection (OpenCV Haar cascade), SQLite persistence, encrypted file storage (AES-GCM), hash chain audit log, case archive verification.
+   - `upstream.py`: Multipart file upload with magic-byte validation, officer identity & rank verification, witness protection masking.
+
+3. **Level 3 (Frontend - Vanilla Web)**
+   - `scripted.py`: Mounts static frontend assets and browser-facing `/api/*` endpoints.
+   - Fully offline vanilla HTML, CSS, and ES modules (no frameworks, no bundlers, no external CDNs).
+   - WebCrypto Ed25519 & HKDF running in-browser for request signing.
 
 ---
 
-## Authentication & Shifting Codes (Ratchet)
+## State Machine & Lockout Protocols
 
-1. **Challenge-Response Login**:
-   - Client requests challenge via `POST /auth/challenge` (receives a single-use 32-byte hex nonce, valid for 30 seconds).
-   - Client signs nonce with Ed25519 private key and submits `POST /auth/login`.
-   - On verification, a session seed is derived via HKDF-SHA256 from the shared secret, nonce, and device ID.
-2. **Per-Request Shifting Codes**:
-   - Each request carries `X-Session-Id`, `X-Counter`, and `X-Code`.
-   - Code ratchet advances using HKDF-SHA256 (`key_n` and `code_n`).
-   - Forward window allows jumping ahead up to 3 counters (`WINDOW = 3`) to tolerate dropped packets.
-3. **Replay Protection**:
-   - The gateway maintains a ring buffer of the last 16 accepted `(counter, SHA256(code))` pairs per session.
-   - An exact replay of an accepted request triggers immediate `LOCKED` lockdown.
-   - Forged old counters or skipped counter arrivals that were not accepted evaluate to `BadCode` without causing a denial-of-service lockout.
+- **Device-Level Lockout:** Three consecutive failed credential attempts on a single device (bad signature, bad passcode, or wrong config hash) lock that specific device until reset via `lotoctl device reset <device_id>`. This survives restarts and never alters system-wide state.
+- **RESTRICTED State:** Triggered by 3 bad shifting codes in a single session. Demotes `/api/*` to read-only methods (`GET`, `HEAD`, `OPTIONS`) and terminates the offending session.
+- **LOCKED State:** Triggered by a true replay of an accepted code, `lotoctl lock`, or tagout. Returns `503 Service Unavailable` on all routes except `GET /status`. Drops sessions and seals the app vault.
+- **TAGOUT Protocol:** Triggered by an officer of rank tier 4+ via `POST /api/tagout` or `lotoctl tagout`. Terminates all sessions, seals the vault, and enters `TAGOUT` state (network inaccessible; server terminal only).
+- **Dual-Control Restore:** Recovery from `LOCKED` or `TAGOUT` requires `lotoctl restore` with two distinct tier-4+ officer approvals and a short-lived restore key (2-minute window).
+
+---
+
+## Security Model & Ranks
+
+- **Officer Ranks:**
+  - Tier 1: Constable
+  - Tier 2: Head Constable
+  - Tier 3: Sub-Inspector
+  - Tier 4: Inspector
+  - Tier 5: Superintendent
+- **Login Factors:**
+  1. Device Key (Ed25519 signature + config hash attestation)
+  2. Officer Passcode (Argon2id hash)
+  3. Face Presence Check (Haar cascade frontal-face detection across captured frames)
+- **Known Limitations:**
+  - Face presence verifies camera presence only, not biological liveness or officer identity; a physical photo can pass.
+  - Face captures are encrypted and retained for security audit for 30 days before automatic purge.
+
+---
+
+## Quick Start & Dev Tools
+
+### Environment Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LOT_BIND` | `127.0.0.1:8080` | Address and port the gateway listens on |
+| `LOT_UPSTREAM` | `http://127.0.0.1:8000` | Target URL for the internal app service |
+| `LOT_DATA_DIR` | `./lot-data` | Directory holding `store.json`, `lock-state.json`, and `gateway.token` |
+| `LOT_REQUIRE_FACE` | `1` | Enforce facial presence verification at login (0 for offline testing) |
+| `DEV_TOOLS` | `0` | Set `1` to enable dev-only reset/unlock actions in `dev/dashboard` |
+
+### Dev Smoke-Test Dashboard
+The smoke-test dashboard is located in `dev/dashboard/` and launched via `run_dashboard.ps1` or `run_dashboard.bat`. Its `/api/unlock` endpoint requires `DEV_TOOLS=1` to prevent accidental resets.
 
 ---
 

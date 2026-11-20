@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Prototype zero-trust gateway: users, devices, sessions, shifting codes, lockout"
 
-# Exact pins. UNVERIFIED in the authoring environment (no rustc, no network).
+# Exact pins.
 [dependencies]
 axum = { version = "=0.7.9", features = ["ws"] }
 tokio = { version = "=1.41.1", features = ["full"] }

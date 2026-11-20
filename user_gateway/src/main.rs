@@ -46,7 +46,7 @@ async fn run() -> Result<(), String> {
         .await
         .map_err(|e| format!("cannot bind {addr}: {e}"))?;
 
-    axum::serve(listener, app)
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .map_err(|e| format!("server error: {e}"))?;
     Ok(())

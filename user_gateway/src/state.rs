@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 use crate::config::Config;
+use crate::crypto;
 use crate::lockout::{self, LockInfo};
 use crate::store::{now_unix, Res, Store};
 
@@ -58,15 +59,30 @@ pub struct AppState {
     pub events: broadcast::Sender<String>,
     /// Shared HTTP client for calls to the upstream.
     pub http: reqwest::Client,
+    /// 32-byte hex token shared with the upstream app.
+    pub gateway_token: String,
 }
 
 pub type SharedState = Arc<AppState>;
+
+fn load_or_create_token(path: &std::path::Path) -> String {
+    if let Ok(content) = std::fs::read_to_string(path) {
+        let trimmed = content.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    let token = crypto::random_hex(32);
+    let _ = crate::store::write_private(path, token.as_bytes(), false);
+    token
+}
 
 impl AppState {
     /// Also loads the saved lock state, so a restart can never unlock the system.
     pub fn new(config: Config, store: Store) -> SharedState {
         let mut live = Live::default();
         live.lock = lockout::load_lock(&config.lock_path());
+        let token = load_or_create_token(&config.token_path());
         let (events, _first_receiver) = broadcast::channel(256);
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -78,6 +94,7 @@ impl AppState {
             live: Mutex::new(live),
             events,
             http,
+            gateway_token: token,
         })
     }
 

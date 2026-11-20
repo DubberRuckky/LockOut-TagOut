@@ -68,6 +68,21 @@ pub fn random_hex(n: usize) -> String {
     hex::encode(buf)
 }
 
+/// Constant-time string equality.
+pub fn ct_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
+}
+
+
 /// Session ratchet seed = HKDF-SHA256(
 ///     ikm  = shared secret (32 bytes),
 ///     salt = nonce bytes (32 bytes, the decoded hex nonce),

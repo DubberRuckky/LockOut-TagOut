@@ -17,7 +17,7 @@ from typing import Any, Dict
 PORT = int(os.environ.get("DASHBOARD_PORT", "5000"))
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8080")
 
-BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
+BASE_DIR = pathlib.Path(__file__).resolve().parent.parent.parent
 USER_GATEWAY_DIR = BASE_DIR / "user_gateway"
 DATA_DIR = USER_GATEWAY_DIR / "lot-data"
 LOTOCTL_EXE = USER_GATEWAY_DIR / "target" / "debug" / "lotoctl.exe"
@@ -382,6 +382,11 @@ class SmokeTestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json(200, {"ok": True, "message": out})
 
     def handle_unlock(self):
+        if os.environ.get("DEV_TOOLS") != "1":
+            return self.send_json(
+                403,
+                {"error": "Unlock is disabled. Set DEV_TOOLS=1 in the environment to enable in dev dashboard."},
+            )
         lock_file = DATA_DIR / "lock-state.json"
         try:
             if lock_file.exists():

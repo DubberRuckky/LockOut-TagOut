@@ -221,3 +221,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# LockOut-TagOut
+*.keyfile.json
+keys/
+lot-data/
+gateway.token
+captures/
+*.db
+.venv/
+test-data/
+

@@ -17,6 +17,7 @@ pub async fn seal_with_retry(state: SharedState, reason: String) {
             .http
             .post(&url)
             .header("content-type", "application/json")
+            .header("x-gateway-token", &state.gateway_token)
             .body(body.clone())
             .send()
             .await;
@@ -35,3 +36,43 @@ pub async fn seal_with_retry(state: SharedState, reason: String) {
     log::warn("upstream seal FAILED after retries; gateway stays LOCKED regardless");
     state.publish("seal_failed", serde_json::json!({}));
 }
+
+/// Send an audit event to the upstream app.
+pub async fn send_audit_event(state: &SharedState, mut event: serde_json::Value) {
+    let url = format!("{}/internal/audit", state.config.upstream.trim_end_matches('/'));
+    if let Some(obj) = event.as_object_mut() {
+        if !obj.contains_key("time") {
+            obj.insert("time".to_string(), serde_json::json!(now_unix()));
+        }
+    }
+    let body = event.to_string();
+    let res = state
+        .http
+        .post(&url)
+        .header("content-type", "application/json")
+        .header("x-gateway-token", &state.gateway_token)
+        .body(body)
+        .send()
+        .await;
+    if let Err(e) = res {
+        log::warn(&format!("failed to send audit event to upstream: {e}"));
+    }
+}
+
+/// Call POST /internal/unseal on the upstream app.
+pub async fn unseal_upstream(state: &SharedState) {
+    let url = format!("{}/internal/unseal", state.config.upstream.trim_end_matches('/'));
+    let body = serde_json::json!({ "time": now_unix() }).to_string();
+    let res = state
+        .http
+        .post(&url)
+        .header("content-type", "application/json")
+        .header("x-gateway-token", &state.gateway_token)
+        .body(body)
+        .send()
+        .await;
+    if let Err(e) = res {
+        log::warn(&format!("failed to unseal upstream: {e}"));
+    }
+}
+

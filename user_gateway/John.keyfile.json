@@ -1,0 +1,7 @@
+{
+  "device_id": "dev-5ea32a37f57841fd",
+  "officer_id": "John",
+  "signing_key_hex": "f152da9290cf98912b6f9f89b14e3f7ea16c3e9c20acc3bc09871ac93b3d4ce3",
+  "shared_secret_hex": "813c952897fb6b98076075bb734831ca10299bee5bf595e0c7c882b34ff68fc6",
+  "device_config": "lot-prototype-device-config-v1"
+}

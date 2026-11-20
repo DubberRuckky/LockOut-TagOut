@@ -85,8 +85,8 @@ async fn restricted_gateway_blocks_writes_to_api_only() {
     assert_eq!(http(addr, "GET", "/health", "").await.0, 200);
     assert_eq!(http(addr, "POST", "/api/cases", "{}").await.0, 403);
     assert_eq!(http(addr, "PUT", "/api/cases/1", "{}").await.0, 403);
-    // a read-only request passes the gate (no /api route until M5, so 404)
-    assert_eq!(http(addr, "GET", "/api/cases", "").await.0, 404);
+    // a read-only request passes the gate (now handled by /api proxy, which checks auth -> 401)
+    assert_eq!(http(addr, "GET", "/api/cases", "").await.0, 401);
     // logging in is still possible while RESTRICTED
     let device = format!("{{\"device_id\":\"{}\"}}", env.device.device_id);
     assert_eq!(http(addr, "POST", "/auth/challenge", &device).await.0, 200);

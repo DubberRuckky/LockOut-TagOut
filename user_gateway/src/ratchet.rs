@@ -71,19 +71,7 @@ pub fn request_headers(
     ])
 }
 
-/// Compare two strings without stopping at the first difference.
-pub fn ct_eq(a: &str, b: &str) -> bool {
-    let a = a.as_bytes();
-    let b = b.as_bytes();
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for i in 0..a.len() {
-        diff |= a[i] ^ b[i];
-    }
-    diff == 0
-}
+pub use crate::crypto::ct_eq;
 
 // ---------------- server side ----------------
 

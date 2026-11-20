@@ -1,7 +1,8 @@
 # lot-gateway
 
-Rust gateway for the zero-trust legal case vault prototype. It handles ONLY users,
-devices, sessions, per-message shifting codes, lockout state and live WebSocket
+> **Specification Authority:** [docs/SPEC.md](file:///docs/SPEC.md) is the single source of truth for all requirements, architecture, and protocols.
+
+Rust gateway for the zero-trust legal case vault. It handles login, logout, devices,
 status. Files, OCR/AI and the audit log live in the separate Python (FastAPI)
 service that this gateway forwards to.
 
@@ -20,8 +21,8 @@ test suites (`cargo test`) pass.
 | Variable       | Default                 | Meaning                          |
 |----------------|-------------------------|----------------------------------|
 | LOT_BIND       | 127.0.0.1:8080          | Address the gateway listens on   |
-| LOT_UPSTREAM   | http://127.0.0.1:9000   | The Python service               |
-| LOT_DATA_DIR   | ./lot-data              | Holds `store.json` and `lock-state.json` |
+| LOT_UPSTREAM   | http://127.0.0.1:8000   | The Python service (`main.py`)    |
+| LOT_DATA_DIR   | ./lot-data              | Holds `store.json`, `lock-state.json`, `gateway.token` |
 
 ## lotoctl commands
 
