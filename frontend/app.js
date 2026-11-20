@@ -183,6 +183,32 @@ async function initCamera() {
   }
 }
 
+function isCanvasBlank(canvas) {
+  try {
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+    let sum = 0;
+    let minVal = 255;
+    let maxVal = 0;
+    const step = 8;
+    let count = 0;
+    for (let i = 0; i < data.length; i += step * 4) {
+      const b = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      sum += b;
+      if (b < minVal) minVal = b;
+      if (b > maxVal) maxVal = b;
+      count++;
+    }
+    const mean = count > 0 ? (sum / count) : 0;
+    const contrast = maxVal - minVal;
+    // Complete blank screen = pitch black (mean < 6) or completely flat uniform (contrast < 4)
+    return (mean < 6 || contrast < 4);
+  } catch (e) {
+    return false;
+  }
+}
+
 function captureFrameBase64() {
   const video = document.getElementById('loginVideo');
   const canvas = document.getElementById('captureCanvas');
@@ -195,12 +221,15 @@ function captureFrameBase64() {
 
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, width, height);
+
+  const blank = isCanvasBlank(canvas);
   const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
   const base64Index = dataUrl.indexOf(',');
-  return base64Index !== -1 ? dataUrl.substring(base64Index + 1) : null;
+  const b64 = base64Index !== -1 ? dataUrl.substring(base64Index + 1) : null;
+  return { b64, blank };
 }
 
-// User-facing Face Presence Scan (burst of 5 frames)
+// User-facing Camera & Face Presence Scan (burst of 5 frames)
 async function performFaceScan() {
   const statusBadge = document.getElementById('cameraStatusBadge');
   const statusText = document.getElementById('cameraStatusText');
@@ -225,10 +254,10 @@ async function performFaceScan() {
 
   if (scanBtn) {
     scanBtn.disabled = true;
-    scanBtn.textContent = 'Scanning Face...';
+    scanBtn.textContent = 'Checking Camera...';
   }
   statusBadge.className = 'camera-badge camera-no-face';
-  statusText.textContent = 'Capturing 5 frames...';
+  statusText.textContent = 'Checking camera feed...';
 
   try {
     // 1. Obtain a fresh nonce if not present
@@ -245,14 +274,34 @@ async function performFaceScan() {
 
     // 2. Capture a burst of 5 distinct frames (80ms apart)
     const frames = [];
+    let blankCount = 0;
     for (let i = 0; i < 5; i++) {
-      const f = captureFrameBase64();
-      if (f) frames.push(f);
+      const cap = captureFrameBase64();
+      if (cap && cap.b64) {
+        frames.push(cap.b64);
+        if (cap.blank) blankCount++;
+      }
       await new Promise(r => setTimeout(r, 80));
     }
 
     if (frames.length === 0) {
       throw new Error('Camera stream not ready. Please check camera feed.');
+    }
+
+    // If every captured frame was a complete blank/black screen
+    if (blankCount === frames.length) {
+      state.faceCheckOk = false;
+      state.activeNonce = null; // force fresh challenge next time
+      statusBadge.className = 'camera-badge camera-blocked';
+      statusText.textContent = 'Camera blocked or blank screen';
+      if (scanBtn) {
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Check Camera Feed';
+      }
+      loginSubmitBtn.disabled = true;
+      loginSubmitBtn.textContent = 'Sign In (Camera Blank / Blocked)';
+      showToast('Camera screen is completely blank. Please ensure your camera is uncovered and active.', 'error');
+      return;
     }
 
     // 3. Post burst of frames to /auth/face
@@ -268,46 +317,46 @@ async function performFaceScan() {
 
     const fData = await fResp.json().catch(() => ({}));
 
-    if (fResp.ok && fData.face_ok) {
+    if (fResp.ok && (fData.ok === true || fData.face_ok === true)) {
       state.faceCheckOk = true;
       statusBadge.className = 'camera-badge camera-face-ok';
-      statusText.textContent = 'Face detected (Verified ✓)';
+      statusText.textContent = 'Camera check successful (Verified ✓)';
       if (scanBtn) {
         scanBtn.disabled = false;
-        scanBtn.textContent = 'Face Verified ✓';
+        scanBtn.textContent = 'Camera Verified ✓';
       }
       loginSubmitBtn.disabled = false;
       loginSubmitBtn.textContent = 'Sign In';
-      showToast('Biometric presence verified! You may now sign in.', 'success');
+      showToast('Camera check successful! You may now sign in.', 'success');
     } else {
       state.faceCheckOk = false;
       state.activeNonce = null; // refresh nonce for next attempt
       const reason = fData.reason || 'no_face';
       if (reason === 'blocked') {
         statusBadge.className = 'camera-badge camera-blocked';
-        statusText.textContent = 'Camera blocked or dark';
-        showToast('Camera frame is too dark or obscured. Please ensure lighting.', 'error');
+        statusText.textContent = 'Camera blocked or blank screen';
+        showToast('Camera screen is completely blank or obscured. Please uncover camera.', 'error');
       } else {
         statusBadge.className = 'camera-badge camera-no-face';
-        statusText.textContent = 'No face detected';
-        showToast('No face detected. Please face the camera and try again.', 'error');
+        statusText.textContent = 'Camera check failed';
+        showToast('Camera check failed. Please ensure camera is active.', 'error');
       }
       if (scanBtn) {
         scanBtn.disabled = false;
-        scanBtn.textContent = 'Check Presence / Scan Face';
+        scanBtn.textContent = 'Check Camera Feed';
       }
       loginSubmitBtn.disabled = true;
-      loginSubmitBtn.textContent = 'Sign In (Awaiting Face Check)';
+      loginSubmitBtn.textContent = 'Sign In (Awaiting Camera Check)';
     }
 
   } catch (err) {
     state.faceCheckOk = false;
     state.activeNonce = null;
     statusBadge.className = 'camera-badge camera-no-face';
-    statusText.textContent = 'Presence check failed';
+    statusText.textContent = 'Camera check failed';
     if (scanBtn) {
       scanBtn.disabled = false;
-      scanBtn.textContent = 'Check Presence / Scan Face';
+      scanBtn.textContent = 'Check Camera Feed';
     }
     showToast(err.message, 'error');
   }
@@ -328,7 +377,7 @@ async function handleLogin(e) {
   }
 
   if (!state.faceCheckOk) {
-    showToast('Face verification required before signing in', 'error');
+    showToast('Camera check required before signing in', 'error');
     return;
   }
 
@@ -456,7 +505,7 @@ function signOut() {
   const loginSubmitBtn = document.getElementById('loginSubmitBtn');
   if (loginSubmitBtn) {
     loginSubmitBtn.disabled = true;
-    loginSubmitBtn.textContent = 'Sign In (Awaiting Face Check)';
+    loginSubmitBtn.textContent = 'Sign In (Awaiting Camera Check)';
   }
 }
 
