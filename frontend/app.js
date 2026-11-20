@@ -160,14 +160,15 @@ async function initCamera() {
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 320 }, height: { ideal: 240 } }
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        facingMode: "user"
+      }
     });
     state.videoStream = stream;
     video.srcObject = stream;
-    setCameraStatus('camera-no-face', 'Camera active (No face)');
-
-    // Start background presence detection
-    startCameraMonitoring();
+    setCameraStatus('camera-no-face', 'Camera active (Ready for scan)');
   } catch (err) {
     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
       setCameraStatus('camera-blocked', 'Camera blocked (Permission denied)');
@@ -185,61 +186,76 @@ async function initCamera() {
 function captureFrameBase64() {
   const video = document.getElementById('loginVideo');
   const canvas = document.getElementById('captureCanvas');
-  if (!video || !canvas || video.readyState !== 4) return null;
+  if (!video || !canvas || video.readyState < 2) return null;
+
+  const width = video.videoWidth || 320;
+  const height = video.videoHeight || 240;
+  canvas.width = width;
+  canvas.height = height;
 
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+  ctx.drawImage(video, 0, 0, width, height);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
   const base64Index = dataUrl.indexOf(',');
   return base64Index !== -1 ? dataUrl.substring(base64Index + 1) : null;
 }
 
-function startCameraMonitoring() {
-  if (state.cameraPollInterval) clearInterval(state.cameraPollInterval);
-
-  // Periodic capture every 3 seconds to check face presence if keyfile & officer are filled
-  state.cameraPollInterval = setInterval(async () => {
-    if (state.authenticated) return;
-    await performFaceCheckIfReady();
-  }, 3000);
-}
-
-async function performFaceCheckIfReady() {
-  const officerInput = document.getElementById('officerIdInput');
+// User-facing Face Presence Scan (burst of 5 frames)
+async function performFaceScan() {
   const statusBadge = document.getElementById('cameraStatusBadge');
   const statusText = document.getElementById('cameraStatusText');
   const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+  const scanBtn = document.getElementById('btnScanFace');
 
-  if (!state.keyfile || !officerInput.value.trim()) {
+  if (!state.keyfile) {
+    showToast('Please select your device keyfile (.json) first', 'error');
+    if (statusBadge) {
+      statusBadge.className = 'camera-badge camera-no-face';
+      statusText.textContent = 'Load keyfile to scan';
+    }
     return;
   }
 
-  // Obtain an active challenge nonce if we do not already have one
-  if (!state.activeNonce) {
-    try {
+  // Ensure camera is initialized
+  const video = document.getElementById('loginVideo');
+  if (!state.videoStream || !video || video.readyState < 2) {
+    await initCamera();
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  if (scanBtn) {
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Scanning Face...';
+  }
+  statusBadge.className = 'camera-badge camera-no-face';
+  statusText.textContent = 'Capturing 5 frames...';
+
+  try {
+    // 1. Obtain a fresh nonce if not present
+    if (!state.activeNonce) {
       const cResp = await fetch('/auth/challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ device_id: state.keyfile.device_id }),
       });
-      if (cResp.ok) {
-        const cData = await cResp.json();
-        state.activeNonce = cData.nonce;
-      }
-    } catch (e) {
-      return;
+      if (!cResp.ok) throw new Error('Challenge request denied by gateway');
+      const cData = await cResp.json();
+      state.activeNonce = cData.nonce;
     }
-  }
 
-  if (!state.activeNonce) return;
+    // 2. Capture a burst of 5 distinct frames (80ms apart)
+    const frames = [];
+    for (let i = 0; i < 5; i++) {
+      const f = captureFrameBase64();
+      if (f) frames.push(f);
+      await new Promise(r => setTimeout(r, 80));
+    }
 
-  // Capture 2-3 frames from video
-  const frame1 = captureFrameBase64();
-  if (!frame1) return;
+    if (frames.length === 0) {
+      throw new Error('Camera stream not ready. Please check camera feed.');
+    }
 
-  const frames = [frame1];
-
-  try {
+    // 3. Post burst of frames to /auth/face
     const fResp = await fetch('/auth/face', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -250,30 +266,50 @@ async function performFaceCheckIfReady() {
       }),
     });
 
-    if (fResp.ok) {
-      const fData = await fResp.json();
-      if (fData.face_ok) {
-        state.faceCheckOk = true;
-        statusBadge.className = 'camera-badge camera-face-ok';
-        statusText.textContent = 'Face detected (Verified)';
-        loginSubmitBtn.disabled = false;
-        loginSubmitBtn.textContent = 'Sign In';
-      } else {
-        state.faceCheckOk = false;
-        statusBadge.className = 'camera-badge camera-no-face';
-        statusText.textContent = 'No face detected';
-        loginSubmitBtn.disabled = true;
-        loginSubmitBtn.textContent = 'Sign In (Awaiting Face)';
+    const fData = await fResp.json().catch(() => ({}));
+
+    if (fResp.ok && fData.face_ok) {
+      state.faceCheckOk = true;
+      statusBadge.className = 'camera-badge camera-face-ok';
+      statusText.textContent = 'Face detected (Verified ✓)';
+      if (scanBtn) {
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Face Verified ✓';
       }
+      loginSubmitBtn.disabled = false;
+      loginSubmitBtn.textContent = 'Sign In';
+      showToast('Biometric presence verified! You may now sign in.', 'success');
     } else {
       state.faceCheckOk = false;
-      // If nonce expired or tripped rate limit, clear nonce to get a fresh one next cycle
-      if (fResp.status === 400 || fResp.status === 429) {
-        state.activeNonce = null;
+      state.activeNonce = null; // refresh nonce for next attempt
+      const reason = fData.reason || 'no_face';
+      if (reason === 'blocked') {
+        statusBadge.className = 'camera-badge camera-blocked';
+        statusText.textContent = 'Camera blocked or dark';
+        showToast('Camera frame is too dark or obscured. Please ensure lighting.', 'error');
+      } else {
+        statusBadge.className = 'camera-badge camera-no-face';
+        statusText.textContent = 'No face detected';
+        showToast('No face detected. Please face the camera and try again.', 'error');
       }
+      if (scanBtn) {
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Check Presence / Scan Face';
+      }
+      loginSubmitBtn.disabled = true;
+      loginSubmitBtn.textContent = 'Sign In (Awaiting Face Check)';
     }
+
   } catch (err) {
     state.faceCheckOk = false;
+    state.activeNonce = null;
+    statusBadge.className = 'camera-badge camera-no-face';
+    statusText.textContent = 'Presence check failed';
+    if (scanBtn) {
+      scanBtn.disabled = false;
+      scanBtn.textContent = 'Check Presence / Scan Face';
+    }
+    showToast(err.message, 'error');
   }
 }
 
@@ -1134,7 +1170,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         status.textContent = `Loaded keyfile for device: ${json.device_id}`;
         status.style.color = 'var(--status-normal)';
         state.activeNonce = null; // force fresh challenge for this device
-        performFaceCheckIfReady();
+
+        // Auto-fill officer ID if available in keyfile
+        const officerInput = document.getElementById('officerIdInput');
+        if (json.officer_id && officerInput && !officerInput.value.trim()) {
+          officerInput.value = json.officer_id;
+        }
+
+        // Trigger face presence scan immediately
+        performFaceScan();
       } catch (err) {
         state.keyfile = null;
         status.textContent = 'Invalid keyfile JSON: ' + err.message;
@@ -1143,6 +1187,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     reader.readAsText(file);
   });
+
+  // Manual Face Scan button over camera feed
+  const scanBtn = document.getElementById('btnScanFace');
+  if (scanBtn) {
+    scanBtn.addEventListener('click', performFaceScan);
+  }
 
   // Tab buttons
   document.querySelectorAll('.tab-btn').forEach(btn => {

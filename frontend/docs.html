@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOTO Case Vault — System Documentation &amp; User Management Guide</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">LockOut-TagOut Case Vault</div>
+        <div class="brand-sub">System Documentation &amp; Administration Guide</div>
+      </div>
+    </div>
+    <div>
+      <a href="/" class="btn btn-secondary btn-small">&larr; Return to Vault</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Zero-Trust Three-Factor Authentication Guide</div>
+      </div>
+      <p class="text-muted mb-4">
+        Every login into the LockOut-TagOut gateway requires three cryptographic and biometric factors:
+      </p>
+      <ol style="padding-left: 1.5rem; line-height: 1.8; margin-bottom: 1.5rem;">
+        <li><strong>Factor 1 (What you have):</strong> Cryptographic Device Keyfile containing an Ed25519 signing seed and a 32-byte HKDF shared secret.</li>
+        <li><strong>Factor 2 (What you know):</strong> Officer Passcode hashed via Argon2id.</li>
+        <li><strong>Factor 3 (Who you are):</strong> Live Biometric Face Presence verified via camera frame burst analysis.</li>
+      </ol>
+
+      <div class="notice-box-tagout mb-4">
+        <strong>Pre-Enrolled Demo Officer Accounts:</strong>
+        <div class="table-responsive mt-2">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Officer ID</th>
+                <th>Rank Tier</th>
+                <th>Keyfile Location</th>
+                <th>Passcode</th>
+                <th>Capabilities</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>alice</strong></td>
+                <td>Tier 1 (Constable)</td>
+                <td><code>lot-data\alice.keyfile.json</code></td>
+                <td><code>Alice123!</code></td>
+                <td>View cases, deposit evidence, propose amendments</td>
+              </tr>
+              <tr>
+                <td><strong>bob</strong></td>
+                <td>Tier 3 (Sub-Inspector)</td>
+                <td><code>lot-data\bob.keyfile.json</code></td>
+                <td><code>Bob123!</code></td>
+                <td>Edit own cases, close &amp; seal cases</td>
+              </tr>
+              <tr>
+                <td><strong>carol</strong></td>
+                <td>Tier 5 (Superintendent)</td>
+                <td><code>lot-data\carol.keyfile.json</code></td>
+                <td><code>Carol123!</code></td>
+                <td>Approve/reject amendments, trigger Tagout, dual-key restore</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">How to Add a New Officer</div>
+      </div>
+      <p class="text-muted mb-4">
+        Officers are provisioned using the <code>lotoctl</code> administrative binary. The gateway hot-reloads <code>store.json</code> automatically, so no server restart is needed.
+      </p>
+
+      <h3 class="font-semibold mb-2">Command Syntax</h3>
+      <pre style="background: #0B2A55; color: #FFFFFF; padding: 1rem; border-radius: 6px; font-family: monospace; overflow-x: auto; margin-bottom: 1.5rem;">
+.\user_gateway\target\debug\lotoctl.exe user add &lt;officer_id&gt; --keyfile &lt;keyfile_path&gt; --passcode "&lt;passcode&gt;" --rank-tier &lt;1-5&gt;
+      </pre>
+
+      <h3 class="font-semibold mb-2">Example: Enrolling Inspector David (Rank Tier 4)</h3>
+      <pre style="background: #0B2A55; color: #FFFFFF; padding: 1rem; border-radius: 6px; font-family: monospace; overflow-x: auto; margin-bottom: 1.5rem;">
+.\user_gateway\target\debug\lotoctl.exe user add david --keyfile .\lot-data\david.keyfile.json --passcode "David123!" --rank-tier 4
+      </pre>
+
+      <h3 class="font-semibold mb-2">Rank Tiers &amp; Authorization Levels</h3>
+      <ul style="padding-left: 1.5rem; line-height: 1.8; margin-bottom: 1.5rem;">
+        <li><strong>Tier 1 — Constable:</strong> Deposit evidence files and propose case amendments.</li>
+        <li><strong>Tier 2 — Head Constable:</strong> Deposit evidence files and propose case amendments.</li>
+        <li><strong>Tier 3 — Sub-Inspector:</strong> Edit created cases and close/seal cases with SHA-256 hash trees.</li>
+        <li><strong>Tier 4 — Inspector:</strong> Approve/reject amendments, initiate Tagout investigations, and approve system restore keys.</li>
+        <li><strong>Tier 5 — Superintendent:</strong> Full executive administration, audit inspection, Tagout authorization, and dual-key system restore.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Security State Machine &amp; Emergency Recovery</div>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>System State</th>
+              <th>Trigger Condition</th>
+              <th>System Impact</th>
+              <th>Restoration Protocol</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="pill pill-open">NORMAL</span></td>
+              <td>Default operating state</td>
+              <td>Full access per rank permissions</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-review">RESTRICTED</span></td>
+              <td>3 invalid shifting codes in one session</td>
+              <td>Proxy demoted to read-only; offending session revoked</td>
+              <td>Session renewal</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-review">LOCKED</span></td>
+              <td>Cryptographic replay detected or manual lock</td>
+              <td>All network requests return 503; vault sealed</td>
+              <td>Host console: dual Tier 4+ officer restore</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-review">TAGOUT</span></td>
+              <td>Tier 4+ officer engages emergency tagout</td>
+              <td>System sealed for formal investigation; network severed</td>
+              <td>Host console: dual Tier 4+ officer restore</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="font-semibold mt-4 mb-2">Dual-Control Restore Procedure</h3>
+      <p class="text-muted mb-2">
+        Restoring the system from <code>LOCKED</code> or <code>TAGOUT</code> requires two distinct officers of Tier 4 or higher within a 2-minute authorization window:
+      </p>
+      <pre style="background: #0B2A55; color: #FFFFFF; padding: 1rem; border-radius: 6px; font-family: monospace; overflow-x: auto;">
+# 1. Generate 2-minute restore authorization key
+.\user_gateway\target\debug\lotoctl.exe generate-restore-key --out .\lot-data\restore.key.json
+
+# 2. Execute dual-officer restoration
+.\user_gateway\target\debug\lotoctl.exe restore --restore-key .\lot-data\restore.key.json --officer-keyfile .\lot-data\carol.keyfile.json --officer-keyfile .\lot-data\david.keyfile.json
+      </pre>
+    </div>
+  </main>
+</body>
+</html>

@@ -66,6 +66,7 @@
     </div>
 
     <div class="header-right">
+      <a href="/ui/docs.html" target="_blank" class="btn btn-secondary btn-small">System Guide</a>
       <div id="systemStateBadge" class="status-badge status-normal">
         <span class="status-dot"></span>
         <span id="systemStateText">NORMAL</span>
@@ -97,7 +98,10 @@
     <section id="view-login" class="view-section active">
       <div class="login-container">
         <div class="login-form-pane">
-          <h2 class="mb-2">Officer Authentication</h2>
+          <div class="card-header">
+            <h2 class="mb-2">Officer Authentication</h2>
+            <a href="/ui/docs.html" target="_blank" class="btn btn-secondary btn-small">User Guide</a>
+          </div>
           <p class="text-muted mb-6">Zero-trust cryptographic challenge-response with live biometric presence.</p>
 
           <form id="loginForm">
@@ -137,6 +141,7 @@
           <div class="video-frame">
             <video id="loginVideo" autoplay playsinline muted></video>
             <canvas id="captureCanvas" width="320" height="240" class="d-none"></canvas>
+            <button type="button" id="btnScanFace" class="camera-scan-btn">Check Presence / Scan Face</button>
           </div>
           <div id="cameraStatusBadge" class="camera-badge camera-no-cam">
             <span>●</span> <span id="cameraStatusText">Initializing camera...</span>

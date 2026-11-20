@@ -755,18 +755,18 @@ def is_frame_blocked(frame: np.ndarray) -> bool:
 
 def detect_faces_in_frame(frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
     """
-    Detect frontal faces where face height is at least 15% of frame height.
+    Detect frontal faces where face height is at least 10% of frame height.
     """
     if frame is None or frame.size == 0:
         return []
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
     frame_h, _ = gray.shape[:2]
-    min_face_h = int(frame_h * 0.15)
+    min_face_h = int(frame_h * 0.10)
 
     faces = face_cascade.detectMultiScale(
         gray,
         scaleFactor=1.1,
-        minNeighbors=4,
+        minNeighbors=3,
         minSize=(min_face_h, min_face_h),
     )
     valid_faces = []
@@ -828,8 +828,8 @@ def check_face(
     if blocked_frames == len(decoded_frames):
         return {"ok": False, "reason": "blocked", "face_count": 0, "frames_with_face": 0, "capture_id": ""}
 
-    # Required: face in at least 3 frames
-    ok = frames_with_face >= 3
+    # Required: face in at least 3 frames (or >= 1 frame if 1-2 frames sent, or >= 2 if 3-4 frames sent)
+    ok = (frames_with_face >= 3) or (len(decoded_frames) < 3 and frames_with_face >= 1) or (len(decoded_frames) <= 4 and frames_with_face >= 2)
     reason = "ok" if ok else ("try_again" if frames_with_face > 0 else "no_face")
 
     capture_id = f"cap-{int(time.time())}-{os.urandom(4).hex()}"

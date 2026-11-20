@@ -421,6 +421,35 @@ table.data-table tr:hover td {
   object-fit: cover;
 }
 
+.camera-scan-btn {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(0, 114, 198, 0.95);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.camera-scan-btn:hover:not(:disabled) {
+  background: var(--blue-hover);
+  transform: translateX(-50%) scale(1.02);
+}
+
+.camera-scan-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .camera-badge {
   padding: 0.35rem 0.85rem;
   border-radius: 9999px;
